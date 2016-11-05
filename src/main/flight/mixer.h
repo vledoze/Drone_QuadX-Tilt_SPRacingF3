@@ -56,7 +56,7 @@ extern motorMixer_t  motorMixerVTOL[MAX_SUPPORTED_MOTORS];
 extern mixerConfig_t mixerConfigVTOL;
 
 extern int16_t       motorsThrottle[MAX_SUPPORTED_MOTORS];
-extern int16_t       motor_disarmed[MAX_SUPPORTED_MOTORS];
+extern int16_t       motorDisarmed[MAX_SUPPORTED_MOTORS];
 extern bool          motorLimitReached;
 
 // Fonctions -----------------------------------------------------------

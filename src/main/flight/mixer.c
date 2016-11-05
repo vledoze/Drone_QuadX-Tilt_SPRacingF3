@@ -64,7 +64,7 @@ mixerConfig_t mixerConfigVTOL;
 motorMixer_t  motorMixerVTOL[MAX_SUPPORTED_MOTORS];
 
 int16_t       motorsThrottle[MAX_SUPPORTED_MOTORS];
-int16_t       motor_disarmed[MAX_SUPPORTED_MOTORS];
+int16_t       motorDisarmed[MAX_SUPPORTED_MOTORS];
 bool          motorLimitReached;
 
 // FONCTIONS STATIC ----------------------------------------------------
@@ -113,7 +113,7 @@ void initMixer(){
 void mixerResetDisarmedMotors(void){
     // set disarmed motorsThrottle values
     for (uint8_t i = 0; i < MAX_SUPPORTED_MOTORS; i++)
-        motor_disarmed[i] = motorAndServoConfig()->mincommand;
+        motorDisarmed[i] = motorAndServoConfig()->mincommand;
 }
 
 /*fonction ecriture des moteurs avec pwm*/
@@ -150,7 +150,7 @@ void mixTable(void){
     /*Disarmed motors*/
     if (!ARMING_FLAG(ARMED)) {
         for (uint32_t i = 0; i < MAX_SUPPORTED_MOTORS; i++) {
-            motorsThrottle[i] = motor_disarmed[i];
+            motorsThrottle[i] = motorDisarmed[i];
         }
     }
     /* Armed motors */

@@ -44,8 +44,8 @@
 #endif
 
 #include "io/serial.h"
-#include "serial_cli.h"
-#include "serial_msp.h"
+#include "io/serial_cli.h"
+#include "io/serial_msp.h"
 
 #include "config/config.h"
 #include "config/parameter_group.h"

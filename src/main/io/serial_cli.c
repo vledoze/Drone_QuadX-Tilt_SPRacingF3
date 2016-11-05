@@ -59,6 +59,7 @@
 #include "io/rate_profile.h"
 #include "io/rc_adjustments.h"
 #include "io/serial.h"
+#include "io/serial_cli.h"
 #include "io/ledstrip.h"
 #include "io/flashfs.h"
 #include "io/beeper.h"
@@ -1699,11 +1700,11 @@ static void cliMotor(char *cmdline)
             cliShowArgumentRangeError("value", 1000, 2000);
             return;
         } else {
-            motor_disarmed[motor_index] = motor_value;
+            motorDisarmed[motor_index] = motor_value;
         }
     }
 
-    cliPrintf("motor %d: %d\r\n", motor_index, motor_disarmed[motor_index]);
+    cliPrintf("motor %d: %d\r\n", motor_index, motorDisarmed[motor_index]);
 }
 
 static void cliPlaySound(char *cmdline)
