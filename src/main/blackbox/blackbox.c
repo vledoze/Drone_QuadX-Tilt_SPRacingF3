@@ -206,9 +206,9 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"rssi",       -1, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), FLIGHT_LOG_FIELD_CONDITION_RSSI},
 
     /* Gyros and accelerometers base their P-predictions on the average of the previous 2 frames to reduce noise impact */
-    {"gyroADC",   0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),     .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
-    {"gyroADC",   1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),     .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
-    {"gyroADC",   2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),     .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"gyroADC",    0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),     .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"gyroADC",    1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),     .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
+    {"gyroADC",    2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),     .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
     {"accSmooth",  0, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),     .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
     {"accSmooth",  1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),     .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
     {"accSmooth",  2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(AVERAGE_2),     .Pencode = ENCODING(SIGNED_VB), CONDITION(ALWAYS)},
@@ -314,9 +314,6 @@ typedef struct blackboxSlowState_s {
     bool rxFlightChannelsValid;
 } __attribute__((__packed__)) blackboxSlowState_t; // We pack this struct so that padding doesn't interfere with memcmp()
 
-//From mixer.c:
-extern uint8_t motorCount;
-
 //From mw.c:
 extern uint32_t currentTime;
 
@@ -394,10 +391,10 @@ static bool testBlackboxConditionUncached(FlightLogFieldCondition condition)
         case FLIGHT_LOG_FIELD_CONDITION_AT_LEAST_MOTORS_6:
         case FLIGHT_LOG_FIELD_CONDITION_AT_LEAST_MOTORS_7:
         case FLIGHT_LOG_FIELD_CONDITION_AT_LEAST_MOTORS_8:
-            return motorCount >= condition - FLIGHT_LOG_FIELD_CONDITION_AT_LEAST_MOTORS_1 + 1;
-        
+            return false;
+
         case FLIGHT_LOG_FIELD_CONDITION_TRICOPTER:
-            return mixerConfig()->mixerMode == MIXER_TRI || mixerConfig()->mixerMode == MIXER_CUSTOM_TRI;
+            return false;
 
         case FLIGHT_LOG_FIELD_CONDITION_NONZERO_PID_D_0:
         case FLIGHT_LOG_FIELD_CONDITION_NONZERO_PID_D_1:
@@ -569,13 +566,15 @@ static void writeIntraframe(void)
     blackboxWriteUnsignedVB(blackboxCurrent->motor[0] - motorAndServoConfig()->minthrottle);
 
     //Motors tend to be similar to each other so use the first motor's value as a predictor of the others
-    for (x = 1; x < motorCount; x++) {
+    for (x = 1; x < MAX_SUPPORTED_MOTORS; x++) {
         blackboxWriteSignedVB(blackboxCurrent->motor[x] - blackboxCurrent->motor[0]);
     }
 
     if (testBlackboxCondition(FLIGHT_LOG_FIELD_CONDITION_TRICOPTER)) {
         //Assume the tail spends most of its time around the center
-        blackboxWriteSignedVB(blackboxCurrent->servo[5] - 1500);
+        for (uint8_t i = 0; i < MAX_SUPPORTED_SERVOS; i++){
+           blackboxWriteSignedVB(blackboxCurrent->servo[i] - 1500);
+        }
     }
 
     //Rotate our history buffers:
@@ -625,13 +624,13 @@ static void writeInterframe(void)
     arraySubInt32(deltas, blackboxCurrent->axisPID_P, blackboxLast->axisPID_P, XYZ_AXIS_COUNT);
     blackboxWriteSignedVBArray(deltas, XYZ_AXIS_COUNT);
 
-    /* 
+    /*
      * The PID I field changes very slowly, most of the time +-2, so use an encoding
      * that can pack all three fields into one byte in that situation.
      */
     arraySubInt32(deltas, blackboxCurrent->axisPID_I, blackboxLast->axisPID_I, XYZ_AXIS_COUNT);
     blackboxWriteTag2_3S32(deltas);
-    
+
     /*
      * The PID D term is frequently set to zero for yaw, which makes the result from the calculation
      * always zero. So don't bother recording D results when PID D terms are zero.
@@ -692,10 +691,12 @@ static void writeInterframe(void)
     //Since gyros, accs and motors are noisy, base their predictions on the average of the history:
     blackboxWriteMainStateArrayUsingAveragePredictor(offsetof(blackboxMainState_t, gyroADC),   XYZ_AXIS_COUNT);
     blackboxWriteMainStateArrayUsingAveragePredictor(offsetof(blackboxMainState_t, accSmooth), XYZ_AXIS_COUNT);
-    blackboxWriteMainStateArrayUsingAveragePredictor(offsetof(blackboxMainState_t, motor),     motorCount);
+    blackboxWriteMainStateArrayUsingAveragePredictor(offsetof(blackboxMainState_t, motor),     MAX_SUPPORTED_MOTORS);
 
     if (testBlackboxCondition(FLIGHT_LOG_FIELD_CONDITION_TRICOPTER)) {
-        blackboxWriteSignedVB(blackboxCurrent->servo[5] - blackboxLast->servo[5]);
+        for (uint8_t i = 0; i < MAX_SUPPORTED_SERVOS; i++){
+            blackboxWriteSignedVB(blackboxCurrent->servo[i] - blackboxLast->servo[i]);
+        }
     }
 
     //Rotate our history buffers
@@ -844,7 +845,7 @@ void startBlackbox(void)
          * cache those now.
          */
         blackboxBuildConditionCache();
-        
+
         blackboxModeActivationConditionPresent = rcModeIsActivationConditionPresent(modeActivationProfile()->modeActivationConditions, BOXBLACKBOX);
 
         blackboxIteration = 0;
@@ -956,8 +957,8 @@ static void loadMainState(void)
         blackboxCurrent->accSmooth[i] = accSmooth[i];
     }
 
-    for (i = 0; i < motorCount; i++) {
-        blackboxCurrent->motor[i] = motor[i];
+    for (i = 0; i < MAX_SUPPORTED_MOTORS; i++) {
+        blackboxCurrent->motor[i] = motorsThrottle[i];
     }
 
     blackboxCurrent->vbatLatest = vbatLatestADC;
@@ -980,10 +981,9 @@ static void loadMainState(void)
 
     blackboxCurrent->rssi = rssi;
 
-#ifdef USE_SERVOS
-    //Tail servo for tricopters
-    blackboxCurrent->servo[5] = servo[5];
-#endif
+    for (uint8_t i = 0; i < MAX_SUPPORTED_SERVOS; i++){
+        blackboxCurrent->servo[i] = servoCmd[i];
+    }
 }
 
 /**
@@ -1118,7 +1118,7 @@ static bool blackboxWriteSysinfo()
             blackboxPrintfHeaderLine("Firmware type:Cleanflight");
         break;
         case 1:
-            blackboxPrintfHeaderLine("Firmware revision:%s", shortGitRevision);
+            blackboxPrintfHeaderLine("Firmware revision: Version 01_00");
         break;
         case 2:
             blackboxPrintfHeaderLine("Firmware date:%s %s", buildDate, buildTime);
@@ -1230,7 +1230,7 @@ static void blackboxCheckAndLogArmingBeep()
     }
 }
 
-/* 
+/*
  * Use the user's num/denom settings to decide if the P-frame of the given index should be logged, allowing the user to control
  * the portion of logged loop iterations.
  */
@@ -1275,7 +1275,7 @@ static void blackboxLogIteration()
         writeIntraframe();
     } else {
         blackboxCheckAndLogArmingBeep();
-        
+
         if (blackboxShouldLogPFrame(blackboxPFrameIndex)) {
             /*
              * We assume that slow frames are only interesting in that they aid the interpretation of the main data stream.
@@ -1412,7 +1412,7 @@ void handleBlackbox(void)
 
                 blackboxLogEvent(FLIGHT_LOG_EVENT_LOGGING_RESUME, (flightLogEventData_t *) &resume);
                 blackboxSetState(BLACKBOX_STATE_RUNNING);
-                
+
                 blackboxLogIteration();
             }
 

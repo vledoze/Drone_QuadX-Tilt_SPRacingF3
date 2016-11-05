@@ -182,7 +182,7 @@ void rxInit(modeActivationCondition_t *modeActivationConditions)
         rcInvalidPulsPeriod[i] = millis() + MAX_INVALID_PULS_TIME;
     }
 
-    rcData[THROTTLE] = (feature(FEATURE_3D)) ? rxConfig()->midrc : rxConfig()->rx_min_usec;
+    rcData[THROTTLE] = rxConfig()->rx_min_usec;
 
     // Initialize ARM switch to OFF position when arming via switch is defined
     for (i = 0; i < MAX_MODE_ACTIVATION_CONDITION_COUNT; i++) {

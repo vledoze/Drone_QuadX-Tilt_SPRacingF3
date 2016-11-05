@@ -166,7 +166,7 @@
 #define SERIAL_RX
 #define TELEMETRY
 #define USE_SERVOS
-#define USE_CLI
+//#define USE_CLI
 
 #define SPEKTRUM_BIND
 // UART3,

@@ -189,7 +189,7 @@ void failsafeUpdateState(void)
             case FAILSAFE_IDLE:
                 if (armed) {
                     // Track throttle command below minimum time
-                    if (THROTTLE_HIGH == calculateThrottleStatus(rxConfig(), rcControlsConfig()->deadband3d_throttle)) {
+                    if (THROTTLE_HIGH == calculateThrottleStatus(rxConfig())) {
                         failsafeState.throttleLowPeriod = millis() + failsafeConfig()->failsafe_throttle_low_delay * MILLIS_PER_TENTH_SECOND;
                     }
                     // Kill switch logic (must be independent of receivingRxData to skip PERIOD_RXDATA_FAILURE delay before disarming)

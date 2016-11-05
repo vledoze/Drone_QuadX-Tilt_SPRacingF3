@@ -151,7 +151,7 @@ int esc4wayInit(void)
     int escIdx = 0;
     for (int i = 0; i < pwmIOConfiguration->ioCount; i++) {
         if ((pwmIOConfiguration->ioConfigurations[i].flags & PWM_PF_MOTOR) == PWM_PF_MOTOR) {
-            if(motor[pwmIOConfiguration->ioConfigurations[i].index] > 0) {
+            if(motorsThrottle[pwmIOConfiguration->ioConfigurations[i].index] > 0) {
                 escHardware[escIdx].gpio = pwmIOConfiguration->ioConfigurations[i].timerHardware->gpio;
                 escHardware[escIdx].pin = pwmIOConfiguration->ioConfigurations[i].timerHardware->pin;
                 escHardware[escIdx].pinpos = getPinPos(escHardware[escIdx].pin);

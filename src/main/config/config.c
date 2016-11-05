@@ -164,9 +164,7 @@ static void activateConfig(void)
     useFailsafeConfig();
     setAccelerationTrims(&sensorTrims()->accZero);
 
-#ifdef USE_SERVOS
-    mixerUseConfigs(servoProfile()->servoConf);
-#endif
+    initMixer();
 
     recalculateMagneticDeclination();
 
@@ -209,8 +207,8 @@ static void validateAndFixConfig(void)
 
     // The retarded_arm setting is incompatible with pid_at_min_throttle because full roll causes the craft to roll over on the ground.
     // The pid_at_min_throttle implementation ignores yaw on the ground, but doesn't currently ignore roll when retarded_arm is enabled.
-    if (armingConfig()->retarded_arm && mixerConfig()->pid_at_min_throttle) {
-        mixerConfig()->pid_at_min_throttle = 0;
+    if (armingConfig()->retarded_arm && mixerConfigVTOL.pid_at_min_throttle) {
+        mixerConfigVTOL.pid_at_min_throttle = 0;
     }
 
 

@@ -116,7 +116,6 @@ extern uint8_t motorControlEnable;
 serialPort_t *loopbackPort;
 #endif
 
-void mixerUsePWMIOConfiguration(pwmIOConfiguration_t *pwmIOConfiguration);
 void rxInit(modeActivationCondition_t *modeActivationConditions);
 
 void navigationInit(pidProfile_t *pidProfile);
@@ -170,7 +169,6 @@ void flashLedsAndBeep(void)
 #ifdef BUTTONS
 void buttonsInit(void)
 {
-
     gpio_config_t buttonAGpioConfig = {
         BUTTON_A_PIN,
         Mode_IPU,
@@ -214,11 +212,8 @@ void buttonsHandleColdBootButtonPresses(void)
 
     // buttons released between 5 and 10 seconds
     if (secondsRemaining < 5) {
-
         usbGenerateDisconnectPulse();
-
         flashLedsAndBeep();
-
         systemResetToBootloader();
     }
 }
@@ -318,19 +313,12 @@ void init(void)
 #endif
 
     delay(100);
-
     timerInit();  // timer must be initialized before any channel is allocated
-
     dmaInit();
 
-
     serialInit(feature(FEATURE_SOFTSERIAL));
-
-    mixerInit(customMotorMixer(0));
-#ifdef USE_SERVOS
-    mixerInitServos(customServoMixer(0));
-#endif
-
+    initMixer();
+    initServos();
     memset(&pwm_params, 0, sizeof(pwm_params));
 
 #ifdef SONAR
@@ -347,11 +335,8 @@ void init(void)
     }
 #endif
 
-    // when using airplane/wing mixer, servo/motor outputs are remapped
-    if (mixerConfig()->mixerMode == MIXER_AIRPLANE || mixerConfig()->mixerMode == MIXER_FLYING_WING || mixerConfig()->mixerMode == MIXER_CUSTOM_AIRPLANE)
-        pwm_params.airplane = true;
-    else
-        pwm_params.airplane = false;
+    pwm_params.airplane = false;
+
 #if defined(USE_UART2) && defined(STM32F10X)
     pwm_params.useUART2 = doesConfigurationUsePort(SERIAL_PORT_UART2);
 #endif
@@ -379,27 +364,22 @@ void init(void)
     pwm_params.useSonar = feature(FEATURE_SONAR);
 #endif
 
-#ifdef USE_SERVOS
-    pwm_params.useServos = isMixerUsingServos();
+    pwm_params.useServos            = isMixerUsingServos();
     pwm_params.useChannelForwarding = feature(FEATURE_CHANNEL_FORWARDING);
-    pwm_params.servoCenterPulse = motorAndServoConfig()->servoCenterPulse;
-    pwm_params.servoPwmRate = motorAndServoConfig()->servo_pwm_rate;
-#endif
+    pwm_params.servoCenterPulse     = motorAndServoConfig()->servoCenterPulse;
+    pwm_params.servoPwmRate         = motorAndServoConfig()->servo_pwm_rate;
 
     pwm_params.useOneshot = feature(FEATURE_ONESHOT125);
     pwm_params.motorPwmRate = motorAndServoConfig()->motor_pwm_rate;
     pwm_params.idlePulse = motorAndServoConfig()->mincommand;
-    if (feature(FEATURE_3D))
-        pwm_params.idlePulse = motor3DConfig()->neutral3d;
     if (pwm_params.motorPwmRate > 500)
         pwm_params.idlePulse = 0; // brushed motors
 
     pwmRxInit();
 
     // pwmInit() needs to be called as soon as possible for ESC compatibility reasons
-    pwmIOConfiguration_t *pwmIOConfiguration = pwmInit(&pwm_params);
-
-    mixerUsePWMIOConfiguration(pwmIOConfiguration);
+    pwmInit(&pwm_params);
+    mixerResetDisarmedMotors();
 
 #ifdef DEBUG_PWM_CONFIGURATION
     debug[2] = pwmIOConfiguration->pwmInputCount;
@@ -510,9 +490,7 @@ void init(void)
 
     flashLedsAndBeep();
 
-#ifdef USE_SERVOS
-    mixerInitialiseServoFiltering(targetLooptime);
-#endif
+    initServoFilter(targetLooptime);
 
 #ifdef MAG
     if (sensors(SENSOR_MAG))
@@ -609,10 +587,9 @@ void init(void)
     initBlackbox();
 #endif
 
-    if (mixerConfig()->mixerMode == MIXER_GIMBAL) {
-        accSetCalibrationCycles(CALIBRATING_ACC_CYCLES);
-    }
+    accSetCalibrationCycles(CALIBRATING_ACC_CYCLES);
     gyroSetCalibrationCycles(CALIBRATING_GYRO_CYCLES);
+
 #ifdef BARO
     baroSetCalibrationCycles(CALIBRATING_BARO_CYCLES);
 #endif

@@ -19,25 +19,10 @@
 #include "gpio.h"
 #include "timer.h"
 
-#if defined(USE_QUAD_MIXER_ONLY)
 #define MAX_PWM_MOTORS  4
-#define MAX_PWM_SERVOS  1
-#define MAX_MOTORS  4
-#define MAX_SERVOS  1
-
-#elif defined(TARGET_MOTOR_COUNT)
-#define MAX_PWM_MOTORS TARGET_MOTOR_COUNT
-#define MAX_PWM_SERVOS 8
-#define MAX_MOTORS  TARGET_MOTOR_COUNT
-#define MAX_SERVOS  8
-
-#else
-#define MAX_PWM_MOTORS  12
-#define MAX_PWM_SERVOS  8
-#define MAX_MOTORS  12
-#define MAX_SERVOS  8
-#endif
-
+#define MAX_PWM_SERVOS  4
+#define MAX_MOTORS      4
+#define MAX_SERVOS      4
 
 #define PULSE_1MS   (1000)      // 1ms pulse width
 

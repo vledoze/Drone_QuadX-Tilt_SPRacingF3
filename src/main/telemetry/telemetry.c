@@ -91,9 +91,9 @@ void telemetryCheckState(void)
     checkMAVLinkTelemetryState();
 }
 
-void telemetryProcess(uint16_t deadband3d_throttle)
+void telemetryProcess()
 {
-    handleFrSkyTelemetry(deadband3d_throttle);
+    handleFrSkyTelemetry();
     handleHoTTTelemetry();
     handleSmartPortTelemetry();
     handleLtmTelemetry();

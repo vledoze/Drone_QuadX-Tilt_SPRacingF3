@@ -54,18 +54,17 @@
 #include "gtune.h"
 
 extern uint16_t cycleTime;
-extern uint8_t motorCount;
 
 /*
  ****************************************************************************
  ***                    G_Tune                                            ***
  ****************************************************************************
-	G_Tune Mode
-	This is the multiwii implementation of ZERO-PID Algorithm
-	http://technicaladventure.blogspot.com/2014/06/zero-pids-tuner-for-multirotors.html
-	The algorithm has been originally developed by Mohammad Hefny (mohammad.hefny@gmail.com)
+  G_Tune Mode
+  This is the multiwii implementation of ZERO-PID Algorithm
+  http://technicaladventure.blogspot.com/2014/06/zero-pids-tuner-for-multirotors.html
+  The algorithm has been originally developed by Mohammad Hefny (mohammad.hefny@gmail.com)
 
-	You may use/modify this algorithm on your own risk, kindly refer to above link in any future distribution.
+  You may use/modify this algorithm on your own risk, kindly refer to above link in any future distribution.
  */
 
 /*
@@ -127,13 +126,13 @@ void init_Gtune(void)
 {
     uint8_t i;
         if (pidProfile()->pidController == 2) {
-	    floatPID = true;                                                        // LuxFloat is using float values for PID settings
-	} else {
-	    floatPID = false;
-	}
-	updateDelayCycles();
-	for (i = 0; i < 3; i++) {
-        if ((gtuneConfig()->gtune_hilimP[i] && gtuneConfig()->gtune_lolimP[i] > gtuneConfig()->gtune_hilimP[i]) || (motorCount < 4 && i == FD_YAW)) { // User config error disable axisis for tuning
+      floatPID = true;                                                        // LuxFloat is using float values for PID settings
+  } else {
+      floatPID = false;
+  }
+  updateDelayCycles();
+  for (i = 0; i < 3; i++) {
+        if ((gtuneConfig()->gtune_hilimP[i] && gtuneConfig()->gtune_lolimP[i] > gtuneConfig()->gtune_hilimP[i]) ) { // User config error disable axisis for tuning
             gtuneConfig()->gtune_hilimP[i] = 0;                                    // Disable YAW tuning for everything below a quadcopter
         }
         if(pidProfile()->P8[i] < gtuneConfig()->gtune_lolimP[i]) {

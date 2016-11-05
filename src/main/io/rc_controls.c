@@ -102,11 +102,9 @@ bool areSticksInApModePosition(uint16_t ap_mode)
     return ABS(rcCommand[ROLL]) < ap_mode && ABS(rcCommand[PITCH]) < ap_mode;
 }
 
-throttleStatus_e calculateThrottleStatus(rxConfig_t *rxConfig, uint16_t deadband3d_throttle)
+throttleStatus_e calculateThrottleStatus(rxConfig_t *rxConfig)
 {
-    if (feature(FEATURE_3D) && (rcData[THROTTLE] > (rxConfig->midrc - deadband3d_throttle) && rcData[THROTTLE] < (rxConfig->midrc + deadband3d_throttle)))
-        return THROTTLE_LOW;
-    else if (!feature(FEATURE_3D) && (rcData[THROTTLE] < rxConfig->mincheck))
+    if (rcData[THROTTLE] < rxConfig->mincheck)
         return THROTTLE_LOW;
 
     return THROTTLE_HIGH;

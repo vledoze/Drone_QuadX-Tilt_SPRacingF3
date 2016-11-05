@@ -403,12 +403,6 @@ void processRx(void)
 
     calculateRxChannelsAndUpdateFailsafe(currentTime);
 
-    // in 3D mode, we need to be able to disarm by switch at any time
-    if (feature(FEATURE_3D)) {
-        if (!rcModeIsActive(BOXARM))
-            mwDisarm();
-    }
-
     updateRSSI(currentTime);
 
     if (feature(FEATURE_FAILSAFE)) {
@@ -420,7 +414,7 @@ void processRx(void)
         failsafeUpdateState();
     }
 
-    throttleStatus_e throttleStatus = calculateThrottleStatus(rxConfig(), rcControlsConfig()->deadband3d_throttle);
+    throttleStatus_e throttleStatus   = calculateThrottleStatus(rxConfig());
     rollPitchStatus_e rollPitchStatus =  calculateRollPitchCenterStatus(rxConfig());
 
     /* In airmode Iterm should be prevented to grow when Low thottle and Roll + Pitch Centered.
@@ -571,9 +565,9 @@ void processRx(void)
         DISABLE_FLIGHT_MODE(PASSTHRU_MODE);
     }
 
-    if (mixerConfig()->mixerMode == MIXER_FLYING_WING || mixerConfig()->mixerMode == MIXER_AIRPLANE) {
-        DISABLE_FLIGHT_MODE(HEADFREE_MODE);
-    }
+    //if (mixerConfig()->mixerMode == MIXER_FLYING_WING || mixerConfig()->mixerMode == MIXER_AIRPLANE) {
+    //    DISABLE_FLIGHT_MODE(HEADFREE_MODE);
+    //}
 
 #ifdef TELEMETRY
     if (feature(FEATURE_TELEMETRY)) {
@@ -677,15 +671,7 @@ void taskMainPidLoop(void)
     // sticks, do not process yaw input from the rx.  We do this so the
     // motors do not spin up while we are trying to arm or disarm.
     // Allow yaw control for tricopters if the user wants the servo to move even when unarmed.
-    if (isUsingSticksForArming() && rcData[THROTTLE] <= rxConfig()->mincheck
-#ifndef USE_QUAD_MIXER_ONLY
-#ifdef USE_SERVOS
-                && !((mixerConfig()->mixerMode == MIXER_TRI || mixerConfig()->mixerMode == MIXER_CUSTOM_TRI) && mixerConfig()->tri_unarmed_servo)
-#endif
-                && mixerConfig()->mixerMode != MIXER_AIRPLANE
-                && mixerConfig()->mixerMode != MIXER_FLYING_WING
-#endif
-    ) {
+    if (isUsingSticksForArming() && rcData[THROTTLE] <= rxConfig()->mincheck) {
         rcCommand[YAW] = 0;
     }
 
@@ -711,11 +697,8 @@ void taskMainPidLoop(void)
     );
 
     mixTable();
-
-#ifdef USE_SERVOS
     filterServos();
     writeServos();
-#endif
 
     if (motorControlEnable) {
         writeMotors();
@@ -783,9 +766,7 @@ void taskUpdateBattery(void)
 
         if (ibatTimeSinceLastServiced >= IBATINTERVAL) {
             ibatLastServiced = currentTime;
-
-            throttleStatus_e throttleStatus = calculateThrottleStatus(rxConfig(), rcControlsConfig()->deadband3d_throttle);
-
+            throttleStatus_e throttleStatus = calculateThrottleStatus(rxConfig());
             updateCurrentMeter(ibatTimeSinceLastServiced, throttleStatus);
         }
     }
@@ -898,7 +879,7 @@ void taskTelemetry(void)
     telemetryCheckState();
 
     if (!cliMode && feature(FEATURE_TELEMETRY)) {
-        telemetryProcess(rcControlsConfig()->deadband3d_throttle);
+        telemetryProcess();
     }
 }
 #endif

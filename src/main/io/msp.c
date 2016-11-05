@@ -264,11 +264,6 @@ static void initActiveBoxIds(void)
     }
 #endif
 
-    if (mixerConfig()->mixerMode == MIXER_FLYING_WING
-        || mixerConfig()->mixerMode == MIXER_AIRPLANE
-        || mixerConfig()->mixerMode == MIXER_CUSTOM_AIRPLANE)
-        ena |= 1 << BOXPASSTHRU;
-
     ena |= 1 << BOXBEEPERON;
 
 #ifdef LED_STRIP
@@ -290,14 +285,6 @@ static void initActiveBoxIds(void)
     if (feature(FEATURE_SONAR)){
         ena |= 1 << BOXSONAR;
     }
-
-#ifdef USE_SERVOS
-    if (mixerConfig()->mixerMode == MIXER_CUSTOM_AIRPLANE) {
-        ena |= 1 << BOXSERVO1;
-        ena |= 1 << BOXSERVO2;
-        ena |= 1 << BOXSERVO3;
-    }
-#endif
 
 #ifdef BLACKBOX
     if (feature(FEATURE_BLACKBOX)){
@@ -564,13 +551,12 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
         case MSP_BUILD_INFO:
             sbufWriteData(dst, buildDate, BUILD_DATE_LENGTH);
             sbufWriteData(dst, buildTime, BUILD_TIME_LENGTH);
-            sbufWriteData(dst, shortGitRevision, GIT_SHORT_REVISION_LENGTH);
             break;
 
             // DEPRECATED - Use MSP_API_VERSION
         case MSP_IDENT:
             sbufWriteU8(dst, MW_VERSION);
-            sbufWriteU8(dst, mixerConfig()->mixerMode);
+            sbufWriteU8(dst, 0);
             sbufWriteU8(dst, MSP_PROTOCOL_VERSION);
             sbufWriteU32(dst, CAP_DYNBALANCE); // "capability"
             break;
@@ -604,40 +590,38 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             break;
         }
 
-#ifdef USE_SERVOS
         case MSP_SERVO:
-            sbufWriteData(dst, &servo, MAX_SUPPORTED_SERVOS * 2);
+            sbufWriteData(dst, &servoCmd, MAX_SUPPORTED_SERVOS);
             break;
 
         case MSP_SERVO_CONFIGURATIONS:
             for (unsigned i = 0; i < MAX_SUPPORTED_SERVOS; i++) {
-                sbufWriteU16(dst, servoProfile()->servoConf[i].min);
-                sbufWriteU16(dst, servoProfile()->servoConf[i].max);
-                sbufWriteU16(dst, servoProfile()->servoConf[i].middle);
-                sbufWriteU8(dst, servoProfile()->servoConf[i].rate);
-                sbufWriteU8(dst, servoProfile()->servoConf[i].angleAtMin);
-                sbufWriteU8(dst, servoProfile()->servoConf[i].angleAtMax);
-                sbufWriteU8(dst, servoProfile()->servoConf[i].forwardFromChannel);
-                sbufWriteU32(dst, servoProfile()->servoConf[i].reversedSources);
+                sbufWriteU16(dst, servoConfVTOL[i].min);
+                sbufWriteU16(dst, servoConfVTOL[i].max);
+                sbufWriteU16(dst, servoConfVTOL[i].middle);
+                sbufWriteU8(dst,  servoConfVTOL[i].rate);
+                sbufWriteU8(dst,  servoConfVTOL[i].angleAtMin);
+                sbufWriteU8(dst,  servoConfVTOL[i].angleAtMax);
+                sbufWriteU8(dst,  servoConfVTOL[i].forwardFromChannel);
+                sbufWriteU32(dst, servoConfVTOL[i].reversedSources);
             }
             break;
 
         case MSP_SERVO_MIX_RULES:
             for (unsigned i = 0; i < MAX_SERVO_RULES; i++) {
-                sbufWriteU8(dst, customServoMixer(i)->targetChannel);
-                sbufWriteU8(dst, customServoMixer(i)->inputSource);
-                sbufWriteU8(dst, customServoMixer(i)->rate);
-                sbufWriteU8(dst, customServoMixer(i)->speed);
-                sbufWriteU8(dst, customServoMixer(i)->min);
-                sbufWriteU8(dst, customServoMixer(i)->max);
-                sbufWriteU8(dst, customServoMixer(i)->box);
+                sbufWriteU8(dst, servoMixerVTOL[i].targetChannel);
+                sbufWriteU8(dst, servoMixerVTOL[i].inputSource);
+                sbufWriteU8(dst, servoMixerVTOL[i].rate);
+                sbufWriteU8(dst, servoMixerVTOL[i].speed);
+                sbufWriteU8(dst, servoMixerVTOL[i].min);
+                sbufWriteU8(dst, servoMixerVTOL[i].max);
+                sbufWriteU8(dst, servoMixerVTOL[i].box);
             }
             break;
-#endif
 
         case MSP_MOTOR:
             for (unsigned i = 0; i < 8; i++) {
-                sbufWriteU16(dst, i < MAX_SUPPORTED_MOTORS ? motor[i] : 0);
+                sbufWriteU16(dst, i < MAX_SUPPORTED_MOTORS ? motorsThrottle[i] : 0);
             }
             break;
 
@@ -872,15 +856,15 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             break;
 
         case MSP_MIXER:
-            sbufWriteU8(dst, mixerConfig()->mixerMode);
+            sbufWriteU8(dst, 0);
             break;
 
         case MSP_RX_CONFIG:
-            sbufWriteU8(dst, rxConfig()->serialrx_provider);
+            sbufWriteU8(dst,  rxConfig()->serialrx_provider);
             sbufWriteU16(dst, rxConfig()->maxcheck);
             sbufWriteU16(dst, rxConfig()->midrc);
             sbufWriteU16(dst, rxConfig()->mincheck);
-            sbufWriteU8(dst, rxConfig()->spektrum_sat_bind);
+            sbufWriteU8(dst,  rxConfig()->spektrum_sat_bind);
             sbufWriteU16(dst, rxConfig()->rx_min_usec);
             sbufWriteU16(dst, rxConfig()->rx_max_usec);
             break;
@@ -902,7 +886,7 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             break;
 
         case MSP_BF_CONFIG:
-            sbufWriteU8(dst, mixerConfig()->mixerMode);
+            sbufWriteU8(dst, 0);
 
             sbufWriteU32(dst, featureMask());
 
@@ -1015,9 +999,7 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             break;
 
         case MSP_3D:
-            sbufWriteU16(dst, motor3DConfig()->deadband3d_low);
-            sbufWriteU16(dst, motor3DConfig()->deadband3d_high);
-            sbufWriteU16(dst, motor3DConfig()->neutral3d);
+            sbufWriteU16(dst, 0);
             break;
 
         case MSP_RC_DEADBAND:
@@ -1203,47 +1185,39 @@ static int processInCommand(mspPacket_t *cmd)
             break;
 
         case MSP_SET_SERVO_CONFIGURATION: {
-#ifdef USE_SERVOS
             if (len != 1 + sizeof(servoParam_t))
                 return -1;
             unsigned i = sbufReadU8(src);
             if (i >= MAX_SUPPORTED_SERVOS)
                 return -1;
 
-            servoProfile()->servoConf[i].min = sbufReadU16(src);
-            servoProfile()->servoConf[i].max = sbufReadU16(src);
-            servoProfile()->servoConf[i].middle = sbufReadU16(src);
-            servoProfile()->servoConf[i].rate = sbufReadU8(src);
-            servoProfile()->servoConf[i].angleAtMin = sbufReadU8(src);
-            servoProfile()->servoConf[i].angleAtMax = sbufReadU8(src);
-            servoProfile()->servoConf[i].forwardFromChannel = sbufReadU8(src);
-            servoProfile()->servoConf[i].reversedSources = sbufReadU32(src);
-#endif
+            servoConfVTOL[i].min     = sbufReadU16(src);
+            servoConfVTOL[i].max     = sbufReadU16(src);
+            servoConfVTOL[i].middle  = sbufReadU16(src);
+            servoConfVTOL[i].rate    = sbufReadU8(src);
+            servoConfVTOL[i].angleAtMin = sbufReadU8(src);
+            servoConfVTOL[i].angleAtMax = sbufReadU8(src);
+            servoConfVTOL[i].forwardFromChannel = sbufReadU8(src);
+            servoConfVTOL[i].reversedSources    = sbufReadU32(src);
             break;
         }
 
         case MSP_SET_SERVO_MIX_RULE: {
-#ifdef USE_SERVOS
             int i = sbufReadU8(src);
-            if (i >= MAX_SERVO_RULES)
+            if (i >= MAX_SUPPORTED_SERVOS)
                 return -1;
 
-            customServoMixer(i)->targetChannel = sbufReadU8(src);
-            customServoMixer(i)->inputSource = sbufReadU8(src);
-            customServoMixer(i)->rate = sbufReadU8(src);
-            customServoMixer(i)->speed = sbufReadU8(src);
-            customServoMixer(i)->min = sbufReadU8(src);
-            customServoMixer(i)->max = sbufReadU8(src);
-            customServoMixer(i)->box = sbufReadU8(src);
-            loadCustomServoMixer();
-#endif
+            servoMixerVTOL[i].targetChannel = sbufReadU8(src);
+            servoMixerVTOL[i].inputSource   = sbufReadU8(src);
+            servoMixerVTOL[i].rate          = sbufReadU8(src);
+            servoMixerVTOL[i].speed         = sbufReadU8(src);
+            servoMixerVTOL[i].min           = sbufReadU8(src);
+            servoMixerVTOL[i].max           = sbufReadU8(src);
+            servoMixerVTOL[i].box           = sbufReadU8(src);
             break;
         }
 
         case MSP_SET_3D:
-            motor3DConfig()->deadband3d_low = sbufReadU16(src);
-            motor3DConfig()->deadband3d_high = sbufReadU16(src);
-            motor3DConfig()->neutral3d = sbufReadU16(src);
             break;
 
         case MSP_SET_RC_DEADBAND:
@@ -1374,11 +1348,9 @@ static int processInCommand(mspPacket_t *cmd)
             batteryConfig()->batteryCapacity = sbufReadU16(src);
             break;
 
-#ifndef USE_QUAD_MIXER_ONLY
         case MSP_SET_MIXER:
-            mixerConfig()->mixerMode = sbufReadU8(src);
+            sbufReadU8(src);
             break;
-#endif
 
         case MSP_SET_RX_CONFIG:
             rxConfig()->serialrx_provider = sbufReadU8(src);
@@ -1412,11 +1384,7 @@ static int processInCommand(mspPacket_t *cmd)
             break;
 
         case MSP_SET_BF_CONFIG:
-#ifdef USE_QUAD_MIXER_ONLY
-            sbufReadU8(src);                                   // mixerMode ignored
-#else
-            mixerConfig()->mixerMode = sbufReadU8(src);        // mixerMode
-#endif
+            sbufReadU8(src);
 
             featureClearAll();
             featureSet(sbufReadU32(src));                      // features bitmap
