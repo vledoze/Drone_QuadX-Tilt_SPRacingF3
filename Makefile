@@ -32,35 +32,32 @@ FLASH_SIZE = 256
 
 ###############################################################################
 # Things that need to be maintained as the source changes
-#
-
-FORKNAME   = cleanflight
-
+###############################################################################
+FORKNAME  = master
 REVISION := $(shell git log -1 --format="%h")
 
 # Working directories
-ROOT		 := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
-SRC_DIR		 = $(ROOT)/src/main
+ROOT		    := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
+SRC_DIR		   = $(ROOT)/src/main
 OBJECT_DIR	 = $(ROOT)/obj/main
-BIN_DIR		 = $(ROOT)/obj
-CMSIS_DIR	 = $(ROOT)/lib/main/CMSIS
-INCLUDE_DIRS	 = $(SRC_DIR)
+BIN_DIR		   = $(ROOT)/obj
+CMSIS_DIR	   = $(ROOT)/lib/main/CMSIS
+INCLUDE_DIRS = $(SRC_DIR)
 LINKER_DIR	 = $(ROOT)/src/main/target
 
 # Search path for sources
-VPATH		:= $(SRC_DIR):$(SRC_DIR)/startup
-USBFS_DIR	= $(ROOT)/lib/main/STM32_USB-FS-Device_Driver
-USBPERIPH_SRC = $(notdir $(wildcard $(USBFS_DIR)/src/*.c))
+VPATH		      := $(SRC_DIR):$(SRC_DIR)/startup
+USBFS_DIR	     = $(ROOT)/lib/main/STM32_USB-FS-Device_Driver
+USBPERIPH_SRC  = $(notdir $(wildcard $(USBFS_DIR)/src/*.c))
 
-CSOURCES        := $(shell find $(SRC_DIR) -name '*.c')
+CSOURCES      := $(shell find $(SRC_DIR) -name '*.c')
 
 # VALID TARGETS = F3 TARGET
-STDPERIPH_DIR	= $(ROOT)/lib/main/STM32F30x_StdPeriph_Driver
+STDPERIPH_DIR	 = $(ROOT)/lib/main/STM32F30x_StdPeriph_Driver
+STDPERIPH_SRC  = $(notdir $(wildcard $(STDPERIPH_DIR)/src/*.c))
 
-STDPERIPH_SRC = $(notdir $(wildcard $(STDPERIPH_DIR)/src/*.c))
-
-EXCLUDES	= stm32f30x_crc.c \
-		        stm32f30x_can.c
+EXCLUDES	     = stm32f30x_crc.c \
+		             stm32f30x_can.c
 
 STDPERIPH_SRC := $(filter-out ${EXCLUDES}, $(STDPERIPH_SRC))
 
@@ -78,16 +75,13 @@ INCLUDE_DIRS := $(INCLUDE_DIRS) \
 		   $(CMSIS_DIR)/CM1/DeviceSupport/ST/STM32F30x
 
 
-LD_SCRIPT	 = $(LINKER_DIR)/stm32_flash_f303_$(FLASH_SIZE)k.ld
+LD_SCRIPT	   = $(LINKER_DIR)/stm32_flash_f303_$(FLASH_SIZE)k.ld
 
 ARCH_FLAGS	 = -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -fsingle-precision-constant -Wdouble-promotion
 DEVICE_FLAGS = -DSTM32F303xC -DSTM32F303
 TARGET_FLAGS = -D$(TARGET)
 
-
-ifneq ($(FLASH_SIZE),)
 DEVICE_FLAGS := $(DEVICE_FLAGS) -DFLASH_SIZE=$(FLASH_SIZE)
-endif
 
 TARGET_DIR = $(ROOT)/src/main/target/$(TARGET)
 TARGET_SRC = $(notdir $(wildcard $(TARGET_DIR)/*.c))
@@ -232,9 +226,9 @@ VPATH		:= $(VPATH):$(STDPERIPH_DIR)/src
 #
 
 # Tool names
-CC		 = arm-none-eabi-gcc
-OBJCOPY		 = arm-none-eabi-objcopy
-SIZE		 = arm-none-eabi-size
+CC		  = arm-none-eabi-gcc
+OBJCOPY	= arm-none-eabi-objcopy
+SIZE	  = arm-none-eabi-size
 
 #
 # Tool options.
@@ -245,7 +239,7 @@ OPTIMIZE	 = -O0
 LTO_FLAGS	 = $(OPTIMIZE)
 else
 OPTIMIZE	 = -Os
-LTO_FLAGS	 =  -flto -fuse-linker-plugin $(OPTIMIZE)
+LTO_FLAGS	 = -flto -fuse-linker-plugin $(OPTIMIZE)
 endif
 
 ifneq ($(filter $(OPTIONS),FAIL_ON_WARNINGS),)
@@ -269,7 +263,7 @@ CFLAGS		 = $(ARCH_FLAGS) \
 						 $(TARGET_FLAGS) \
 						 -D'__FORKNAME__="$(FORKNAME)"' \
 						 -D'__TARGET__="$(TARGET)"' \
-		   -D'__REVISION__="$(REVISION)"' \
+		         -D'__REVISION__="$(REVISION)"' \
 						 -fverbose-asm -ffat-lto-objects \
 						 -save-temps=obj \
 						 -MMD -MP
@@ -299,9 +293,9 @@ LDFLAGS		 = -lm \
 # No user-serviceable parts below
 ###############################################################################
 
-CPPCHECK   = cppcheck $(CSOURCES) --enable=all --platform=unix64 \
-					 --std=c99 --inline-suppr --quiet --force \
-					 $(addprefix -I,$(INCLUDE_DIRS)) \
+CPPCHECK = cppcheck $(CSOURCES) --enable=all --platform=unix64 \
+					 --std=c99 --inline-suppr --quiet --force            \
+					 $(addprefix -I,$(INCLUDE_DIRS))                     \
 					 -I/usr/include -I/usr/include/linux
 
 #
@@ -345,12 +339,12 @@ clean:
 	rm -rf $(OBJECT_DIR)/$(TARGET)
 	cd src/test && $(MAKE) clean || true
 
+## flash       : flash firmware (.hex) onto flight controller
 flash_$(TARGET): $(TARGET_HEX)
 	stty -F $(SERIAL_DEVICE) raw speed 115200 -crtscts cs8 -parenb -cstopb -ixon
 	echo -n 'R' >$(SERIAL_DEVICE)
 	stm32flash -w $(TARGET_HEX) -v -g 0x0 -b 115200 $(SERIAL_DEVICE)
 
-## flash       : flash firmware (.hex) onto flight controller
 flash: flash_$(TARGET)
 
 st-flash_$(TARGET): $(TARGET_BIN)
@@ -382,15 +376,14 @@ help: Makefile
 
 ## test        : run the cleanflight test suite
 ## junittest   : run the cleanflight test suite, producing Junit XML result files.
-test junittest:
-	cd src/test && $(MAKE) $@
+## test junittest:  (TODO les sources tests n'existent pas sur Git)
+## 	 cd src/test && $(MAKE) $@
 
 # rebuild everything when makefile changes
 $(TARGET_OBJS) : Makefile
 
 # List of buildable ELF files and their object dependencies.
 # It would be nice to compute these lists, but that seems to be just beyond make.
-
 $(TARGET_HEX): $(TARGET_ELF)
 	$(OBJCOPY) -O ihex --set-start 0x8000000 $< $@
 
