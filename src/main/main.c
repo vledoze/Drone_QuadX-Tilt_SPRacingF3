@@ -148,6 +148,7 @@ PG_RESET_TEMPLATE(systemConfig_t, systemConfig,
     .i2c_highspeed = 1,
 );
 // -- Etats possibles de la variable "systemState"
+// -- On met progressivement à 1 les bits de la variable "systemState"
 typedef enum {
     SYSTEM_STATE_INITIALISING        = 0,
     SYSTEM_STATE_CONFIG_LOADED       = (1 << 0),
@@ -241,9 +242,20 @@ void flashLedsAndBeep(void)
 //Description : Initialisation globale materiel + systeme
 void init(void)
 {
-    //Parametres PWM
-    drv_pwm_config_t pwm_params;
-
+    //VARIABLES INTERNES =======================================================
+    drv_pwm_config_t pwm_params;  //Parametres PWM
+    #ifdef SONAR                  //Parametres SONAR
+        const sonarHardware_t *sonarHardware = NULL;
+        sonarGPIOConfig_t sonarGPIOConfig;
+    #endif //SONAR
+    #ifdef BEEPER                 //Paramètres BEEPER
+        beeperConfig_t beeperConfig;
+    #endif //BEEPER
+    #ifdef USE_ADC               //Paramètres ADC
+        drv_adc_config_t adc_params;
+    #endif  
+  
+    //INITILISATION SUPPORT PHYSIQUE ===========================================
     //Print ? TODO quoi
     printfSupportInit();
 
@@ -252,13 +264,14 @@ void init(void)
     ensureEEPROMContainsValidData();
     readEEPROM();
 
-    //TODO a quoi ca sert ??
+    //Ok 1ere étape : systemState  passe de 0000 0000 -> 0000 0001
     systemState |= SYSTEM_STATE_CONFIG_LOADED;
-
+    
+    //INITIALISATION SYSTEME ==================================
     //TODO quoi ?
     #ifdef STM32F303
         SCB->CPACR = (0x3 << (10*2)) | (0x3 << (11*2));  // start fpu
-    #endif // STM32F10X
+    #endif // STM32F303
 
     //Mise en place horloge systeme
     #ifdef STM32F303xC
@@ -280,10 +293,10 @@ void init(void)
         detectHardwareRevision();
     #endif //USE_HARDWARE_REVISION_DETECTION
 
-    // Latch active features to be used for feature() in the remainder of init().
+    //Latch active features to be used for feature() in the remainder of init().
     latchActiveFeatures();
 
-    //Initialisation des LEDs
+    //Initialisation LED 
     #ifdef ALIENFLIGHTF3
         if (hardwareRevision == AFF3_REV_1) {
             ledInit(false);
@@ -294,20 +307,20 @@ void init(void)
         ledInit(false);
     #endif //ALIENFLIGHTF3
 
-    //Initialisation du BEEPER
+    //Initialisation BEEPER
     #ifdef BEEPER
         //Configuration BEEPER
-        beeperConfig_t beeperConfig = {
+        beeperConfig = {
             .gpioPeripheral = BEEP_PERIPHERAL,
             .gpioPin        = BEEP_PIN,
             .gpioPort       = BEEP_GPIO,
-        #ifdef BEEPER_INVERTED
-                .gpioMode        = Mode_Out_PP,
-                .isInverted      = true
-        #else
-                .gpioMode        = Mode_Out_OD,
-                .isInverted      = false
-        #endif //BEEPER_INVERTED
+            #ifdef BEEPER_INVERTED
+                .gpioMode   = Mode_Out_PP,
+                .isInverted = true
+            #else
+                .gpioMode   = Mode_Out_OD,
+                .isInverted = false
+            #endif //BEEPER_INVERTED
         };
         //Forcage configuration BEEPER : cas spéciaux NAZE
         #ifdef NAZE
@@ -350,133 +363,23 @@ void init(void)
     //Delais pour s'assurer que les initialisation précédentes
     //ont eu le temps de se mettre en place
     delay(100);
-
-    //Initialisation du Timer
-    timerInit();  // timer must be initialized before any channel is allocated
-
-    //Initialisation du DMA : TODO quoi ?
-    dmaInit();
-
-    //Initialisation serial : TODO quoi ?
-    serialInit(feature(FEATURE_SOFTSERIAL));
-
-    //Initialisation configuration moteur+servos
-    initMixer();
-    initServos();
-
-    //Initilisation des paramètres PWM a 0
-    //Préparation pour les initialisation des sorties analogique
-    memset(&pwm_params, 0, sizeof(pwm_params));
-
-    //Initialisation SONAR
-    #ifdef SONAR
-        const sonarHardware_t *sonarHardware = NULL;
-        if (feature(FEATURE_SONAR)) {
-            //Configuration signal SONAR
-            sonarHardware = sonarGetHardwareConfiguration(batteryConfig()->currentMeterType);
-            sonarGPIOConfig_t sonarGPIOConfig = {
-                .gpio       = SONAR_GPIO,
-                .triggerPin = sonarHardware->echo_pin,
-                .echoPin    = sonarHardware->trigger_pin,
-            };
-            //configuration SONAR -> configuration PWM
-            pwm_params.sonarGPIOConfig = &sonarGPIOConfig;
-        }
-    #endif
-
-    //TODO quoi ?
-    pwm_params.airplane = false;
-
-    //configuration ports UART -> configuration PWM
-    #if defined(USE_UART2) && defined(STM32F10X)
-        pwm_params.useUART2 = doesConfigurationUsePort(SERIAL_PORT_UART2);
-    #endif
-    #if defined(USE_UART3)
-        pwm_params.useUART3 = doesConfigurationUsePort(SERIAL_PORT_UART3);
-    #endif
-    #if defined(USE_UART4)
-        pwm_params.useUART4 = doesConfigurationUsePort(SERIAL_PORT_UART4);
-    #endif
-    #if defined(USE_UART5)
-        pwm_params.useUART5 = doesConfigurationUsePort(SERIAL_PORT_UART5);
-    #endif
-
-    //Fonctionnalités (entrée/sorties) supportees -> configuration PWM
-    pwm_params.useVbat        = feature(FEATURE_VBAT);
-    pwm_params.useSoftSerial  = feature(FEATURE_SOFTSERIAL);
-    pwm_params.useParallelPWM = feature(FEATURE_RX_PARALLEL_PWM);
-    pwm_params.useRSSIADC     = feature(FEATURE_RSSI_ADC);
-    pwm_params.useCurrentMeterADC = (
-        feature(FEATURE_CURRENT_METER)
-        && batteryConfig()->currentMeterType == CURRENT_SENSOR_ADC
-    );
-    pwm_params.useLEDStrip    = feature(FEATURE_LED_STRIP);
-    pwm_params.usePPM         = feature(FEATURE_RX_PPM);
-    pwm_params.useSerialRx    = feature(FEATURE_RX_SERIAL);
-    #ifdef SONAR
-        pwm_params.useSonar = feature(FEATURE_SONAR);
-    #endif
-
-    //Signal servo-moteur -> configuration PWM
-    pwm_params.useServos            = isMixerUsingServos();
-    pwm_params.useChannelForwarding = feature(FEATURE_CHANNEL_FORWARDING);
-    pwm_params.servoCenterPulse     = motorAndServoConfig()->servoCenterPulse;
-    pwm_params.servoPwmRate         = motorAndServoConfig()->servo_pwm_rate;
-
-    //Signal moteur -> configuration PWM
-    pwm_params.useOneshot           = feature(FEATURE_ONESHOT125);
-    pwm_params.motorPwmRate         = motorAndServoConfig()->motor_pwm_rate;
-    pwm_params.idlePulse            = motorAndServoConfig()->mincommand;
-    if (pwm_params.motorPwmRate > 500)
-        pwm_params.idlePulse = 0; // brushed motors
-
-    //TODO quoi ??
-    pwmRxInit();
-
-    //Initialisation PWM avec la configuration choisie
-    pwmInit(&pwm_params); // pwmInit() needs to be called as soon as possible for ESC compatibility reasons
-
-    //On envoi le signal PWM necessaire pour desarmer les moteurs (Securité)
-    mixerResetDisarmedMotors();
-
-    //Enregistrement signal PWM pour debogue
-    #ifdef DEBUG_PWM_CONFIGURATION
-        debug[2] = pwmIOConfiguration->pwmInputCount;
-        debug[3] = pwmIOConfiguration->ppmInputCount;
-    #endif //DEBUG_PWM_CONFIGURATION
-
-    //On peut maintenant activer le controle des moteurs
-    if (!feature(FEATURE_ONESHOT125)){
-        motorControlEnable = true;
-    }
-    systemState |= SYSTEM_STATE_MOTORS_READY;
-
-    //TODO quoi ??
-    #ifdef INVERTER
-        initInverter();
-    #endif //INVERTER
-
-    //Initialisation signal SPI
-    #ifdef USE_SPI
-        spiInit(SPI1);
-        spiInit(SPI2);
-        #ifdef STM32F303xC
-            #ifdef ALIENFLIGHTF3
-                if (hardwareRevision == AFF3_REV_2) {
-                    spiInit(SPI3);
-                }
-            #else
-                spiInit(SPI3);
-            #endif //ALIENFLIGHTF3
-        #endif //STM32F303xC
-    #endif //USE_SPI
-
-    //Mise à jour version materiel
+    
+    //INITIALISATIONS ENTREES/SORTIES ======================================== 
+    //On check la version du materiel
     #ifdef USE_HARDWARE_REVISION_DETECTION
         updateHardwareRevision();
     #endif //USE_HARDWARE_REVISION_DETECTION
+      
+    //Initialisation TIMER
+    timerInit();  // timer must be initialized before any channel is allocated
 
-    //Cas particuliers : tri des ports inutilisés / version materiel
+    //Initialisation DMA 
+    dmaInit();
+
+    //Initialisation SERIAL
+    serialInit(feature(FEATURE_SOFTSERIAL));
+
+    //Tri des ports SERIAL inutilisés / version materiel
     #ifdef NAZE
         if (hardwareRevision == NAZE32_SP) {
             serialRemovePort(SERIAL_PORT_SOFTSERIAL2);
@@ -495,7 +398,94 @@ void init(void)
         }
     #endif //(SPRACINGF3MINI)&&(SONAR)&&(USE_SOFTSERIAL2)
 
-    //Initilisation signaux I2C
+    //Initialisation PWM
+    // -- Par defaut tous les paramètre PWM sont "false"
+    memset(&pwm_params, 0, sizeof(pwm_params));
+    // -- Configuration PWM : airplane mode (true/false) 
+    pwm_params.airplane = false;
+    // -- Configuration PWM : Utilisation des ports SERIAL UART (true/false)
+    #if defined(USE_UART2) && defined(STM32F10X)
+        pwm_params.useUART2 = doesConfigurationUsePort(SERIAL_PORT_UART2);
+    #endif
+    #if defined(USE_UART3)
+        pwm_params.useUART3 = doesConfigurationUsePort(SERIAL_PORT_UART3);
+    #endif
+    #if defined(USE_UART4)
+        pwm_params.useUART4 = doesConfigurationUsePort(SERIAL_PORT_UART4);
+    #endif
+    #if defined(USE_UART5)
+        pwm_params.useUART5 = doesConfigurationUsePort(SERIAL_PORT_UART5);
+    #endif  
+    // -- Configuration PWM : Fonctionnalités supportées (true/false)
+    pwm_params.useVbat            = feature(FEATURE_VBAT);
+    pwm_params.useSoftSerial      = feature(FEATURE_SOFTSERIAL);
+    pwm_params.useParallelPWM     = feature(FEATURE_RX_PARALLEL_PWM);
+    pwm_params.useRSSIADC         = feature(FEATURE_RSSI_ADC);
+    pwm_params.useCurrentMeterADC = (  
+        feature(FEATURE_CURRENT_METER)
+        && batteryConfig()->currentMeterType == CURRENT_SENSOR_ADC);
+    pwm_params.useLEDStrip        = feature(FEATURE_LED_STRIP);
+    pwm_params.usePPM             = feature(FEATURE_RX_PPM);
+    pwm_params.useSerialRx        = feature(FEATURE_RX_SERIAL);
+    // -- Configuration PWM : Fonctionnalités SONAR 
+    #ifdef SONAR
+        if (feature(FEATURE_SONAR)) {
+            //Configuration materiel SONAR
+            sonarHardware   = sonarGetHardwareConfiguration(batteryConfig()->currentMeterType);
+            //Configuration signal SONAR
+            sonarGPIOConfig = {
+                .gpio       = SONAR_GPIO,
+                .triggerPin = sonarHardware->echo_pin,
+                .echoPin    = sonarHardware->trigger_pin,
+            };
+        }
+        pwm_params.sonarGPIOConfig = &sonarGPIOConfig;
+        pwm_params.useSonar        = feature(FEATURE_SONAR);
+    #endif
+    // -- Configuration PWM : Fonctionnalités SERVOS 
+    pwm_params.useServos            = isMixerUsingServos();
+    pwm_params.useChannelForwarding = feature(FEATURE_CHANNEL_FORWARDING);
+    pwm_params.servoCenterPulse     = motorAndServoConfig()->servoCenterPulse;
+    pwm_params.servoPwmRate         = motorAndServoConfig()->servo_pwm_rate;
+    // -- Configuration PWM : Fonctionnalités MOTORS
+    pwm_params.useOneshot           = feature(FEATURE_ONESHOT125);
+    pwm_params.motorPwmRate         = motorAndServoConfig()->motor_pwm_rate;
+    pwm_params.idlePulse            = motorAndServoConfig()->mincommand;
+    if (pwm_params.motorPwmRate > 500){
+        pwm_params.idlePulse        = 0; // brushed motors
+    }
+  
+    //Initialisation PWM avec la configuration choisie
+    pwmRxInit();
+    pwmInit(&pwm_params); // pwmInit() needs to be called as soon as possible for ESC compatibility reasons
+
+    //Enregistrement signal PWM pour debogue
+    #ifdef DEBUG_PWM_CONFIGURATION
+        debug[2] = pwmIOConfiguration->pwmInputCount;
+        debug[3] = pwmIOConfiguration->ppmInputCount;
+    #endif //DEBUG_PWM_CONFIGURATION
+      
+    //Initilisation INVERTER
+    #ifdef INVERTER
+        initInverter();
+    #endif //INVERTER
+
+    //Initialisation SPI
+    #ifdef USE_SPI
+        spiInit(SPI1);
+        spiInit(SPI2);
+        #ifdef STM32F303xC
+            #ifdef ALIENFLIGHTF3
+                if (hardwareRevision == AFF3_REV_2) {
+                    spiInit(SPI3);
+                }
+            #else
+                spiInit(SPI3);
+            #endif //ALIENFLIGHTF3
+        #endif //STM32F303xC
+    #endif //USE_SPI
+
+    //Initilisation I2C
     #ifdef USE_I2C
         #if defined(NAZE)
             if (hardwareRevision != NAZE32_SP) {
@@ -514,14 +504,13 @@ void init(void)
         #endif //(NAZE)||(CC3D)
     #endif //USE_I2C
 
-    //Initialisation signal ADC
+    //Initialisation ADC
     #ifdef USE_ADC
         //Parametres ADC
-        drv_adc_config_t adc_params;
-        adc_params.enableVBat = feature(FEATURE_VBAT);
-        adc_params.enableRSSI = feature(FEATURE_RSSI_ADC);
+        adc_params.enableVBat         = feature(FEATURE_VBAT);
+        adc_params.enableRSSI         = feature(FEATURE_RSSI_ADC);
         adc_params.enableCurrentMeter = feature(FEATURE_CURRENT_METER);
-        adc_params.enableExternal1 = false;
+        adc_params.enableExternal1    = false;
         #ifdef OLIMEXINO
             adc_params.enableExternal1 = true;
         #endif //OLIMEXINO
@@ -532,7 +521,27 @@ void init(void)
         //Initialisation signal ADC avec le parametrage choisi
         adcInit(&adc_params);
     #endif //USE_ADC
-
+    
+    //INITIALISATIONS ACTUATEURS ========================================
+    //Initialisation configuration moteur+servos
+    initMixer();
+    initServos();
+  
+    //Initialisation des filtres appliqués aux Servo-moteurs
+    initServoFilter(targetLooptime);
+  
+    //On envoi le signal PWM necessaire pour desarmer les moteurs (Securité)
+    mixerResetDisarmedMotors();
+  
+    //On peut maintenant activer le controle des moteurs
+    if (!feature(FEATURE_ONESHOT125)){
+        motorControlEnable = true;
+    }
+    
+    //2nd Etape OK : "systemState" passe de 0000 0001 -> 0000 0101
+    systemState |= SYSTEM_STATE_MOTORS_READY;
+    
+    //INITILISATIONS SENSEURS ==========================================
     //Initialisation de l'alignement de la carte
     initBoardAlignment();
 
@@ -556,53 +565,65 @@ void init(void)
         failureMode(FAILURE_MISSING_ACC);
     }
 
-    //OK initilisation Materiel
-    systemState |= SYSTEM_STATE_SENSORS_READY;
-    flashLedsAndBeep();
-
-    //Initialisation des filtres appliqués aux Servo-moteurs
-    initServoFilter(targetLooptime);
-
     //Initilisation magnetomètres
     #ifdef MAG
-        if (sensors(SENSOR_MAG))
+        if (sensors(SENSOR_MAG)){
             compassInit();
+        }
     #endif
 
     //Initilisation IMU
     imuInit();
-
-    //Initialisation interface MSP
-    mspInit();
-    mspSerialInit();
-
-    //Initilisation interface CLI
-    #ifdef USE_CLI
-        cliInit();
-    #endif
-
-    //Initilisation du Fail-safe
-    failsafeInit();
-
-    //Initialisation RX : TODO pourquoi la ?
-    rxInit(modeActivationProfile()->modeActivationConditions);
-
-    //Initilisation NAVIGATION
+  
+    //Initilisation GPS
     #ifdef GPS
         if (feature(FEATURE_GPS)) {
-            //Initilisation GPS
             gpsInit();
-            //Initilisation algos NAVIGATION : TODO Pourquoi ici ??
-            navigationInit(pidProfile());
         }
     #endif //GPS
+
     #ifdef SONAR
         if (feature(FEATURE_SONAR)) {
             sonarInit(sonarHardware);
         }
     #endif //SONAR
+      
+    // 3eme Etape : OK initilisation Senseurs
+    // -- "systemState" passe de 0000 0101 -> 0000 0111
+    systemState |= SYSTEM_STATE_SENSORS_READY;
+    flashLedsAndBeep();
 
-    //Initilisation de la bande de LED
+    //INITIALISATION COMMUNICATION =================================
+    //Initialisation MSP
+    mspInit();
+    mspSerialInit();
+
+    //Initilisation CLI
+    #ifdef USE_CLI
+        cliInit();
+    #endif
+
+    //Initialisation RX 
+    rxInit(modeActivationProfile()->modeActivationConditions);
+
+    //Initialisation USB CABLE DETECTION
+    #ifdef USB_CABLE_DETECTION
+        usbCableDetectInit();
+    #endif //USB_CABLE_DETECTION
+    
+    //INITIALISATION FONCTIONNALITES ===============================
+    //Initilisation FAIL-SAFE
+    failsafeInit();
+  
+    //Initialisation NAVIGATION
+    #ifdef GPS
+        if (feature(FEATURE_GPS)) {
+            //La présence de GPS est obligatoire pour la NAVIGATION
+            navigationInit(pidProfile());
+        }
+    #endif //GPS
+
+    //Initialisation BANDE LED
     #ifdef LED_STRIP
         ledStripInit();
         if (feature(FEATURE_LED_STRIP)) {
@@ -610,29 +631,30 @@ void init(void)
         }
     #endif //LED_STRIP
 
-    //Initilisation de la TELEMETRIE
+    //Initialisation TELEMETRIE
     #ifdef TELEMETRY
         if (feature(FEATURE_TELEMETRY)) {
             telemetryInit();
         }
     #endif //TELEMETRY
 
-    //test : cable USB connecté ???
-    #ifdef USB_CABLE_DETECTION
-        usbCableDetectInit();
-    #endif //USB_CABLE_DETECTION
-
-    //Initilisation du transpondeur : TODO quoi ???
+    //Initialisation TRANSPONDEUR
     #ifdef TRANSPONDER
         if (feature(FEATURE_TRANSPONDER)) {
+            //Initilisation 
             transponderInit(transponderConfig()->data);
+            //Mise en route
             transponderEnable();
+            //Boucle 
             transponderStartRepeating();
+            //4eme Etape: OK initialisation transpondeur
+            // -- "systemState" passe de 0000 0111 -> 0000 1111
             systemState |= SYSTEM_STATE_TRANSPONDER_ENABLED;
         }
     #endif //TRANSPONDER
 
-    //Initilisation FLASH Carte
+    //INITIALISATION MEMOIRE =======================================
+    //Initialisation FLASH
     #ifdef USE_FLASHFS
         #ifdef NAZE
             if (hardwareRevision == NAZE32_REV5) {
@@ -644,7 +666,7 @@ void init(void)
         flashfsInit();
     #endif
 
-    //Initilisation lecture SD-CARD
+    //Initialisation lecture SD-CARD
     #ifdef USE_SDCARD
         bool sdcardUseDMA = false;
         sdcardInsertionDetectInit();
@@ -660,28 +682,28 @@ void init(void)
         afatfs_init();
     #endif //SD-CARD
 
-    //Initilisation boite-noire embarquée
+    //Initialisation BOITE-NOIRE
     #ifdef BLACKBOX
         initBlackbox();
     #endif //BLACKBOX
 
+    //FIN DES INITIALISATIONS ========================================= 
     //Calibration IMU
     accSetCalibrationCycles(CALIBRATING_ACC_CYCLES);
     gyroSetCalibrationCycles(CALIBRATING_GYRO_CYCLES);
 
-    //Calibration Barometre
+    //Calibration BAROMETRE
     #ifdef BARO
         baroSetCalibrationCycles(CALIBRATING_BARO_CYCLES);
     #endif //BARO
 
-    // start all timers
-    // TODO - not implemented yet
-    timerStart();
+    //Start all timers
+    timerStart(); // TODO - not implemented yet
 
     ENABLE_STATE(SMALL_ANGLE);
     DISABLE_ARMING_FLAG(PREVENT_ARMING);
 
-    //Boucle de retour ??? TODO quoi ??
+    //Boucle de retour
     #ifdef SOFTSERIAL_LOOPBACK
         // FIXME this is a hack, perhaps add a FUNCTION_LOOPBACK to support it properly
         loopbackPort = (serialPort_t*)&(softSerialPorts[0]);
@@ -691,14 +713,12 @@ void init(void)
         serialPrint(loopbackPort, "LOOPBACK\r\n");
     #endif //SOFTSERIAL_LOOPBACK
 
-    // Now that everything has powered up the voltage and cell count be determined.
-
-    //Initilisation suivi niveau de batterie
+    //Now that everything has powered up the voltage and cell count be determined.
     if (feature(FEATURE_VBAT | FEATURE_CURRENT_METER)){
         batteryInit();
     }
 
-    //Fixed page GPS pour debug ??? TODO quoi
+    //Start display
     #ifdef DISPLAY
         if (feature(FEATURE_DISPLAY)) {
             #ifdef USE_OLED_GPS_DEBUG_PAGE_ONLY
@@ -715,10 +735,11 @@ void init(void)
         LED2_ON;
     #endif //CJMCU
 
-    // Latch active features AGAIN since some may be modified by init().
+    //Latch active features AGAIN since some may be modified by init().
     latchActiveFeatures();
 
-    //OK - le systeme est prèt
+    //Derniere Etape OK - le systeme est prèt
+    // -- systemeState passe de 0000 1111 -> 1000 1111 
     motorControlEnable = true;
     systemState |= SYSTEM_STATE_READY;
 }
@@ -801,15 +822,20 @@ int main(void) {
 //Description : Gestion des default au cours de l'utilisation ?? TODO
 void HardFault_Handler(void)
 {
-    // fall out of the sky
+    // fall out of the sky 
+    // -- requiredStateForMotor = 0000 0001 | 0000 0101 = 0000 0101
     uint8_t requiredStateForMotors = SYSTEM_STATE_CONFIG_LOADED | SYSTEM_STATE_MOTORS_READY;
     if ((systemState & requiredStateForMotors) == requiredStateForMotors) {
+        //On verifie que les étapes CONFIG_LOADED et MOTORS_READY se sont 
+        //toutes les deux bien passées dans la fonction Init() 
         stopMotors();
     }
     #ifdef TRANSPONDER
         // prevent IR LEDs from burning out.
         uint8_t requiredStateForTransponder = SYSTEM_STATE_CONFIG_LOADED | SYSTEM_STATE_TRANSPONDER_ENABLED;
         if ((systemState & requiredStateForTransponder) == requiredStateForTransponder) {
+            //Idem, on vérifie que les étapes CONFIG_LOADED et TRANSPONDER_ENABLED se sont
+            //bien passées dans la fonction Init()
             transponderIrDisable();
         }
     #endif //TRANSPONDER
