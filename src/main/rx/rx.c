@@ -59,27 +59,8 @@
 
 #include "rx/rx.h"
 
+//DEFINITIONS LOCALES ---------------------------------------------------------
 //#define DEBUG_RX_SIGNAL_LOSS
-
-const char rcChannelLetters[] = "AERT12345678abcdefgh";
-
-uint16_t rssi = 0;                  // range: [0;1023]
-
-static bool rxDataReceived = false;
-static bool rxSignalReceived = false;
-static bool rxSignalReceivedNotDataDriven = false;
-static bool rxFlightChannelsValid = false;
-static bool rxIsInFailsafeMode = true;
-static bool rxIsInFailsafeModeNotDataDriven = true;
-
-static uint32_t rxUpdateAt = 0;
-static uint32_t needRxSignalBefore = 0;
-static uint32_t suspendRxSignalUntil = 0;
-static uint8_t  skipRxSamples = 0;
-
-int16_t rcRaw[MAX_SUPPORTED_RC_CHANNEL_COUNT];     // interval [1000;2000]
-int16_t rcData[MAX_SUPPORTED_RC_CHANNEL_COUNT];     // interval [1000;2000]
-uint32_t rcInvalidPulsPeriod[MAX_SUPPORTED_RC_CHANNEL_COUNT];
 
 #define MAX_INVALID_PULS_TIME    300
 #define PPM_AND_PWM_SAMPLE_COUNT 3
@@ -90,24 +71,66 @@ uint32_t rcInvalidPulsPeriod[MAX_SUPPORTED_RC_CHANNEL_COUNT];
 #define SKIP_RC_ON_SUSPEND_PERIOD 1500000           // 1.5 second period in usec (call frequency independent)
 #define SKIP_RC_SAMPLES_ON_RESUME  2                // flush 2 samples to drop wrong measurements (timing independent)
 
-static uint8_t rcSampleIndex = 0;
+#define REQUIRED_CHANNEL_MASK 0x0F                  // first 4 channels
 
+//VARIABLES LOCALES ------------------------------------------------------------
+// -- Déclaration - Constantes
+const char rcChannelLetters[] = "AERT12345678abcdefgh";
+
+// -- Déclaration - Variables Static
+static uint8_t  validFlightChannelMask;
+static uint16_t rxRefreshRate;
+
+// -- Initialisation - Variables static
+static bool     rxDataReceived                  = false;
+static bool     rxSignalReceived                = false;
+static bool     rxSignalReceivedNotDataDriven   = false;
+static bool     rxFlightChannelsValid           = false;
+static bool     rxIsInFailsafeMode              = true;
+static bool     rxIsInFailsafeModeNotDataDriven = true;
+
+static uint8_t  skipRxSamples        = 0;
+static uint8_t  rcSampleIndex        = 0;
+static uint32_t rxUpdateAt           = 0;
+static uint32_t needRxSignalBefore   = 0;
+static uint32_t suspendRxSignalUntil = 0;
+
+// -- Déclaration  - Variables simples
+int16_t  rcRaw[MAX_SUPPORTED_RC_CHANNEL_COUNT];      // interval [1000;2000]
+uint32_t rcInvalidPulsPeriod[MAX_SUPPORTED_RC_CHANNEL_COUNT];
+
+// VARIABLES GLOBALES ---------------------------------------------------------
+// -- Déclaration - Variable externes
 rxRuntimeConfig_t rxRuntimeConfig;
+int16_t           rcData[MAX_SUPPORTED_RC_CHANNEL_COUNT];     // interval [1000;2000]
 
+// -- Initialisation - Variable externes
+uint16_t          rssi = 0;                                   // range: [0;1023]
+
+// -- Allocation Memoire - Variables partagées
 PG_REGISTER_WITH_RESET_TEMPLATE(rxConfig_t, rxConfig, PG_RX_CONFIG, 0);
 
+// -- Allocation Memoire - Liste de variables partagées 
 PG_REGISTER_ARR_WITH_RESET_FN(rxFailsafeChannelConfig_t, MAX_SUPPORTED_RC_CHANNEL_COUNT, failsafeChannelConfigs, PG_FAILSAFE_CHANNEL_CONFIG, 0);
 PG_REGISTER_ARR_WITH_RESET_FN(rxChannelRangeConfiguration_t, NON_AUX_CHANNEL_COUNT, channelRanges, PG_CHANNEL_RANGE_CONFIG, 0);
 
+// -- Initilisation - Variable partagee  
 PG_RESET_TEMPLATE(rxConfig_t, rxConfig,
     .sbus_inversion = 1,
-    .midrc = 1500,
-    .mincheck = 1100,
-    .maxcheck = 1900,
-    .rx_min_usec = 885,          // any of first 4 channels below this value will trigger rx loss detection
-    .rx_max_usec = 2115,         // any of first 4 channels above this value will trigger rx loss detection
-    .rssi_scale = RSSI_SCALE_DEFAULT,
+    .midrc          = 1500,
+    .mincheck       = 1100,
+    .maxcheck       = 1900,
+    .rx_min_usec    = 885,          // any of first 4 channels below this value will trigger rx loss detection
+    .rx_max_usec    = 2115,         // any of first 4 channels above this value will trigger rx loss detection
+    .rssi_scale     = RSSI_SCALE_DEFAULT,
 );
+
+//FONCTIONS -----------------------------------------------------------------------
+// -- Déclaration de fonctions locales
+
+void serialRxInit(rxConfig_t *rxConfig);
+
+// -- Implementations
 
 void pgResetFn_channelRanges(rxChannelRangeConfiguration_t *instance)
 {
@@ -135,15 +158,7 @@ static uint16_t nullReadRawRC(rxRuntimeConfig_t *rxRuntimeConfig, uint8_t channe
 
     return PPM_RCVR_TIMEOUT;
 }
-
-static rcReadRawDataPtr rcReadRawFunc = nullReadRawRC;
-static uint16_t rxRefreshRate;
-
-void serialRxInit(rxConfig_t *rxConfig);
-
-#define REQUIRED_CHANNEL_MASK 0x0F // first 4 channels
-
-static uint8_t validFlightChannelMask;
+static rcReadRawDataPtr rcReadRawFunc = nullReadRawRC; //On initialise la fonction en l'implementant avec celle déclaree juste avant
 
 STATIC_UNIT_TESTED void rxResetFlightChannelStatus(void)
 {
