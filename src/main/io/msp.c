@@ -23,7 +23,7 @@
 
 #include "build_config.h"
 #include "debug.h"
-#include <platform.h>
+#include "platform.h"
 #include "scheduler.h"
 
 #include "common/axis.h"
@@ -67,6 +67,7 @@
 #include "io/msp_protocol.h"
 #include "io/serial_msp.h"
 #include "io/serial_4way.h"
+#include "io/msp.h"
 
 #include "telemetry/telemetry.h"
 
@@ -92,25 +93,51 @@
 #include "mw.h"
 
 #include "version.h"
+
 #ifdef USE_HARDWARE_REVISION_DETECTION
-#include "hardware_revision.h"
+  #include "hardware_revision.h"
 #endif
 
-#include "io/msp.h"
+// DEFINITIONS ---------------------------------------------------------------------
+#define IS_ENABLED(mask) (mask == 0 ? 0 : 1)
 
-extern uint16_t cycleTime; // FIXME dependency on mw.c
-extern uint16_t rssi; // FIXME dependency on mw.c
-extern void resetPidProfile(pidProfile_t *pidProfile);
-
-static const char * const flightControllerIdentifier = CLEANFLIGHT_IDENTIFIER; // 4 UPPER CASE alpha numeric characters that identify the flight controller.
-static const char * const boardIdentifier = TARGET_BOARD_IDENTIFIER;
-
+// DECLARATIONS LOCALES -------------------------------------------------------------
 typedef struct box_e {
-    const char *boxName;            // GUI-readable box name
-    const uint8_t boxId;            // see boxId_e (it is equal to table index, may be optimized)
-    const uint8_t permanentId;      // ID for MSP protocol
+    const char    *boxName;          // GUI-readable box name
+    const uint8_t  boxId;            // see boxId_e (it is equal to table index, may be optimized)
+    const uint8_t  permanentId;      // ID for MSP protocol
 } box_t;
 
+typedef enum {
+    MSP_SDCARD_STATE_NOT_PRESENT = 0,
+    MSP_SDCARD_STATE_FATAL       = 1,
+    MSP_SDCARD_STATE_CARD_INIT   = 2,
+    MSP_SDCARD_STATE_FS_INIT     = 3,
+    MSP_SDCARD_STATE_READY       = 4,
+} mspSDCardState_e;
+
+typedef enum {
+    MSP_SDCARD_FLAG_SUPPORTTED   = 1,
+} mspSDCardFlags_e;
+
+typedef enum {
+    MSP_FLASHFS_BIT_READY        = 1,
+    MSP_FLASHFS_BIT_SUPPORTED    = 2,
+} mspFlashfsFlags_e;
+
+// VARIABLES GLOBALES ----------------------------------------------------------------
+extern uint16_t cycleTime; // FIXME dependency on mw.c
+extern uint16_t rssi;      // FIXME dependency on mw.c
+
+// Fonction ???
+extern void     resetPidProfile(pidProfile_t *pidProfile);
+
+// VARIABLES LOCALES ------------------------------------------------------------------
+// -- Pointeur Constants sur Variables Static Constantes
+static const char * const flightControllerIdentifier = CLEANFLIGHT_IDENTIFIER; // 4 UPPER CASE alpha numeric characters that identify the flight controller.
+static const char * const boardIdentifier            = TARGET_BOARD_IDENTIFIER;
+
+// -- Variable Static Constantes
 static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
     { "ARM",       BOXARM,        0 },
     { "ANGLE",     BOXANGLE,      1 },
@@ -143,15 +170,6 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
     { "AIR MODE",  BOXAIRMODE,   28 },
 };
 
-// mask of enabled IDs, calculated on start based on enabled features. boxId_e is used as bit index.
-static uint32_t activeBoxIds;
-
-// cause reboot after MSP processing complete
-bool isRebootScheduled = false;
-// switch to 4wayIf (on current port)
-#ifdef USE_SERIAL_4WAY_BLHELI_INTERFACE
-bool mspEnterEsc4way = false;
-#endif
 static const char pidnames[] =
     "ROLL;"
     "PITCH;"
@@ -163,24 +181,18 @@ static const char pidnames[] =
     "LEVEL;"
     "MAG;"
     "VEL;";
+    
+// -- Variables Static
+// mask of enabled IDs, calculated on start based on enabled features. boxId_e is used as bit index.
+static uint32_t activeBoxIds;
 
-typedef enum {
-    MSP_SDCARD_STATE_NOT_PRESENT = 0,
-    MSP_SDCARD_STATE_FATAL       = 1,
-    MSP_SDCARD_STATE_CARD_INIT   = 2,
-    MSP_SDCARD_STATE_FS_INIT     = 3,
-    MSP_SDCARD_STATE_READY       = 4,
-} mspSDCardState_e;
+// -- Variables simples
+bool isRebootScheduled = false;   // cause reboot after MSP processing complete
+#ifdef USE_SERIAL_4WAY_BLHELI_INTERFACE
+  bool mspEnterEsc4way = false;   // switch to 4wayIf (on current port)
+#endif //USE_SERIAL_4WAY_BLHELI_INTERFACE
 
-typedef enum {
-    MSP_SDCARD_FLAG_SUPPORTTED   = 1,
-} mspSDCardFlags_e;
-
-typedef enum {
-    MSP_FLASHFS_BIT_READY        = 1,
-    MSP_FLASHFS_BIT_SUPPORTED    = 2,
-} mspFlashfsFlags_e;
-
+// FONCTIONS --------------------------------------------------------------------
 static const box_t *findBoxByBoxId(uint8_t boxId)
 {
     for (unsigned i = 0; i < ARRAYLEN(boxes); i++) {
@@ -231,17 +243,17 @@ static void initActiveBoxIds(void)
     uint32_t ena = 0;
 
     ena |= 1 << BOXARM;
-
+    
     if (sensors(SENSOR_ACC)) {
         ena |= 1 << BOXANGLE;
         ena |= 1 << BOXHORIZON;
     }
 
-#ifdef BARO
-    if (sensors(SENSOR_BARO)) {
-        ena |= 1 << BOXBARO;
-    }
-#endif
+    #ifdef BARO
+        if (sensors(SENSOR_BARO)) {
+            ena |= 1 << BOXBARO;
+        }
+    #endif //BARO
 
     ena |= 1 << BOXAIRMODE;
 
@@ -254,92 +266,94 @@ static void initActiveBoxIds(void)
     if (feature(FEATURE_SERVO_TILT))
         ena |= 1 << BOXCAMSTAB;
 
-#ifdef GPS
-    if (feature(FEATURE_GPS)) {
-        ena |= 1 << BOXGPSHOME;
-        ena |= 1 << BOXGPSHOLD;
-    }
-#endif
+    #ifdef GPS
+        if (feature(FEATURE_GPS)) {
+            ena |= 1 << BOXGPSHOME;
+            ena |= 1 << BOXGPSHOLD;
+        }
+    #endif
 
     ena |= 1 << BOXBEEPERON;
 
-#ifdef LED_STRIP
-    if (feature(FEATURE_LED_STRIP)) {
-        ena |= 1 << BOXLEDLOW;
-    }
-#endif
+    #ifdef LED_STRIP
+        if (feature(FEATURE_LED_STRIP)) {
+            ena |= 1 << BOXLEDLOW;
+        }
+    #endif
 
     if (feature(FEATURE_INFLIGHT_ACC_CAL))
         ena |= 1 << BOXCALIB;
 
     ena |= 1 << BOXOSD;
 
-#ifdef TELEMETRY
-    if (feature(FEATURE_TELEMETRY) && telemetryConfig()->telemetry_switch)
-        ena |= 1 << BOXTELEMETRY;
-#endif
+    #ifdef TELEMETRY
+        if (feature(FEATURE_TELEMETRY) && telemetryConfig()->telemetry_switch){
+            ena |= 1 << BOXTELEMETRY;
+        }
+    #endif
 
     if (feature(FEATURE_SONAR)){
         ena |= 1 << BOXSONAR;
     }
 
-#ifdef BLACKBOX
-    if (feature(FEATURE_BLACKBOX)){
-        ena |= 1 << BOXBLACKBOX;
-    }
-#endif
+    #ifdef BLACKBOX
+        if (feature(FEATURE_BLACKBOX)){
+            ena |= 1 << BOXBLACKBOX;
+        }
+    #endif
 
     if (feature(FEATURE_FAILSAFE)){
         ena |= 1 << BOXFAILSAFE;
     }
 
-#ifdef GTUNE
-    ena |= 1 << BOXGTUNE;
-#endif
+    #ifdef GTUNE
+        ena |= 1 << BOXGTUNE;
+    #endif
 
     // check that all enabled IDs are in boxes array (check is skipped when using findBoxBy<id>() functions
-    for(boxId_e boxId = 0;  boxId < CHECKBOX_ITEM_COUNT; boxId++)
-        if((ena & (1 << boxId))
-           && findBoxByBoxId(boxId) == NULL)
-            ena &= ~ (1 << boxId);                // this should not happen, but handle it gracefully
+    for(boxId_e boxId = 0;  boxId < CHECKBOX_ITEM_COUNT; boxId++){
+        if((ena & (1 << boxId)) && findBoxByBoxId(boxId) == NULL){
+            ena &= ~ (1 << boxId);  // this should not happen, but handle it gracefully
+        }
+    }
+
     activeBoxIds = ena;
 }
 
-#define IS_ENABLED(mask) (mask == 0 ? 0 : 1)
 
 static uint32_t packFlightModeFlags(void)
 {
     // Serialize the flags in the order we delivered them, ignoring BOXNAMES and BOXINDEXES
     // Requires new Multiwii protocol version to fix
     // It would be preferable to setting the enabled bits based on BOXINDEX.
-
     uint32_t boxEnabledMask = 0;      // enabled BOXes, bits indexed by boxId_e
 
     // enable BOXes dependent on FLIGHT_MODE, use mapping table
     static const int8_t flightMode_boxId_map[] = FLIGHT_MODE_BOXID_MAP_INITIALIZER;
     flightModeFlags_e flightModeCopyMask = ~(GTUNE_MODE);  // BOXGTUNE is based on rcMode, not flight mode
-    for(unsigned i = 0; i < ARRAYLEN(flightMode_boxId_map); i++) {
-        if(flightMode_boxId_map[i] == -1)
+    for (unsigned i = 0; i < ARRAYLEN(flightMode_boxId_map); i++) {
+        if (flightMode_boxId_map[i] == -1)
             continue;                 // boxId_e does not exist for this FLIGHT_MODE
-        if((flightModeCopyMask & (1 << i)) == 0)
+        if ((flightModeCopyMask & (1 << i)) == 0)
             continue;                 // this flightmode is not copied
-        if(FLIGHT_MODE(1 << i))
+        if (FLIGHT_MODE(1 << i))
             boxEnabledMask |= 1 << flightMode_boxId_map[i];
     }
 
     // enable BOXes dependent on rcMode bits, indexes are the same.
     // only subset of BOXes depend on rcMode, use mask to mark them
-#define BM(x) (1 << (x))
-    const uint32_t rcModeCopyMask = BM(BOXHEADADJ) | BM(BOXCAMSTAB) | BM(BOXCAMTRIG) | BM(BOXBEEPERON)
-        | BM(BOXLEDMAX) | BM(BOXLEDLOW) | BM(BOXLLIGHTS) | BM(BOXCALIB) | BM(BOXGOV) | BM(BOXOSD)
-        | BM(BOXTELEMETRY) | BM(BOXGTUNE) | BM(BOXBLACKBOX)  | BM(BOXAIRMODE) ;
-    for(unsigned i = 0; i < sizeof(rcModeCopyMask) * 8; i++) {
-        if((rcModeCopyMask & BM(i)) == 0)
-            continue;
-        if(rcModeIsActive(i))
-            boxEnabledMask |= 1 << i;
-    }
-#undef BM
+    #define BM(x) (1 << (x))
+        const uint32_t rcModeCopyMask = BM(BOXHEADADJ) | BM(BOXCAMSTAB) | BM(BOXCAMTRIG) | BM(BOXBEEPERON)
+            | BM(BOXLEDMAX) | BM(BOXLEDLOW) | BM(BOXLLIGHTS) | BM(BOXCALIB) | BM(BOXGOV) | BM(BOXOSD)
+            | BM(BOXTELEMETRY) | BM(BOXGTUNE) | BM(BOXBLACKBOX)  | BM(BOXAIRMODE) ;
+        for(unsigned i = 0; i < sizeof(rcModeCopyMask) * 8; i++) {
+            if((rcModeCopyMask & BM(i)) == 0)
+                continue;
+            if(rcModeIsActive(i))
+                boxEnabledMask |= 1 << i;
+        }
+    #undef BM
+    
     // copy ARM state
     if(ARMING_FLAG(ARMED))
         boxEnabledMask |= 1 << BOXARM;
@@ -361,81 +375,80 @@ static uint32_t packFlightModeFlags(void)
 static void serializeSDCardSummaryReply(mspPacket_t *reply)
 {
     sbuf_t *dst = &reply->buf;
-#ifdef USE_SDCARD
-    uint8_t flags = MSP_SDCARD_FLAG_SUPPORTTED;
-    uint8_t state;
-
-    sbufWriteU8(dst, flags);
-
-    // Merge the card and filesystem states together
-    if (!sdcard_isInserted()) {
-        state = MSP_SDCARD_STATE_NOT_PRESENT;
-    } else if (!sdcard_isFunctional()) {
-        state = MSP_SDCARD_STATE_FATAL;
-    } else {
-        switch (afatfs_getFilesystemState()) {
-            case AFATFS_FILESYSTEM_STATE_READY:
-                state = MSP_SDCARD_STATE_READY;
-                break;
-            case AFATFS_FILESYSTEM_STATE_INITIALIZATION:
-                if (sdcard_isInitialized()) {
-                    state = MSP_SDCARD_STATE_FS_INIT;
-                } else {
-                    state = MSP_SDCARD_STATE_CARD_INIT;
-                }
-                break;
-            case AFATFS_FILESYSTEM_STATE_FATAL:
-            case AFATFS_FILESYSTEM_STATE_UNKNOWN:
-            default:
-                state = MSP_SDCARD_STATE_FATAL;
-                break;
+    #ifdef USE_SDCARD
+        uint8_t flags = MSP_SDCARD_FLAG_SUPPORTTED;
+        uint8_t state;
+    
+        sbufWriteU8(dst, flags);
+    
+        // Merge the card and filesystem states together
+        if (!sdcard_isInserted()) {
+            state = MSP_SDCARD_STATE_NOT_PRESENT;
+        } else if (!sdcard_isFunctional()) {
+            state = MSP_SDCARD_STATE_FATAL;
+        } else {
+            switch (afatfs_getFilesystemState()) {
+                case AFATFS_FILESYSTEM_STATE_READY:
+                    state = MSP_SDCARD_STATE_READY;
+                    break;
+                case AFATFS_FILESYSTEM_STATE_INITIALIZATION:
+                    if (sdcard_isInitialized()) {
+                        state = MSP_SDCARD_STATE_FS_INIT;
+                    } else {
+                        state = MSP_SDCARD_STATE_CARD_INIT;
+                    }
+                    break;
+                case AFATFS_FILESYSTEM_STATE_FATAL:
+                case AFATFS_FILESYSTEM_STATE_UNKNOWN:
+                default:
+                    state = MSP_SDCARD_STATE_FATAL;
+                    break;
+            }
         }
-    }
-
-    sbufWriteU8(dst, state);
-    sbufWriteU8(dst, afatfs_getLastError());
-    // Write free space and total space in kilobytes
-    sbufWriteU32(dst, afatfs_getContiguousFreeSpace() / 1024);
-    sbufWriteU32(dst, sdcard_getMetadata()->numBlocks / 2); // Block size is half a kilobyte
-#else
-    sbufWriteU8(dst, 0);
-    sbufWriteU8(dst, 0);
-    sbufWriteU8(dst, 0);
-    sbufWriteU32(dst, 0);
-    sbufWriteU32(dst, 0);
-#endif
+        sbufWriteU8(dst, state);
+        sbufWriteU8(dst, afatfs_getLastError());
+        
+        sbufWriteU32(dst, afatfs_getContiguousFreeSpace() / 1024);  // Write free space and total space in kilobytes
+        sbufWriteU32(dst, sdcard_getMetadata()->numBlocks / 2);     // Block size is half a kilobyte
+    #else //!USE_SD_CARD
+        sbufWriteU8(dst, 0);
+        sbufWriteU8(dst, 0);
+        sbufWriteU8(dst, 0);
+        sbufWriteU32(dst, 0);
+        sbufWriteU32(dst, 0);
+    #endif //USE_SD_CARD
 }
 
 static void serializeDataflashSummaryReply(mspPacket_t *reply)
 {
     sbuf_t *dst = &reply->buf;
-#ifdef USE_FLASHFS
-    const flashGeometry_t *geometry = flashfsGetGeometry();
-    uint8_t flags = (flashfsIsReady() ? MSP_FLASHFS_BIT_READY : 0) | MSP_FLASHFS_BIT_SUPPORTED;
-
-    sbufWriteU8(dst, flags);
-    sbufWriteU32(dst, geometry->sectors);
-    sbufWriteU32(dst, geometry->totalSize);
-    sbufWriteU32(dst, flashfsGetOffset()); // Effectively the current number of bytes stored on the volume
-#else
-    sbufWriteU8(dst, 0); // FlashFS is neither ready nor supported
-    sbufWriteU32(dst, 0);
-    sbufWriteU32(dst, 0);
-    sbufWriteU32(dst, 0);
-#endif
+    #ifdef USE_FLASHFS
+        const flashGeometry_t *geometry = flashfsGetGeometry();
+        uint8_t flags = (flashfsIsReady() ? MSP_FLASHFS_BIT_READY : 0) | MSP_FLASHFS_BIT_SUPPORTED;
+    
+        sbufWriteU8(dst, flags);
+        sbufWriteU32(dst, geometry->sectors);
+        sbufWriteU32(dst, geometry->totalSize);
+        sbufWriteU32(dst, flashfsGetOffset()); // Effectively the current number of bytes stored on the volume
+    #else //!USE_FLASHFS
+        sbufWriteU8(dst, 0); // FlashFS is neither ready nor supported
+        sbufWriteU32(dst, 0);
+        sbufWriteU32(dst, 0);
+        sbufWriteU32(dst, 0);
+    #endif //USE_FLASHFS
 }
 
 #ifdef USE_FLASHFS
-static void serializeDataflashReadReply(mspPacket_t *reply, uint32_t address, int size)
-{
-    sbuf_t *dst = &reply->buf;
-    sbufWriteU32(dst, address);
-    size = MIN(size, sbufBytesRemaining(dst));    // limit reply to available buffer space
-    // bytesRead will be lower than that requested if we reach end of volume
-    int bytesRead = flashfsReadAbs(address, sbufPtr(dst), size);
-    sbufAdvance(dst, bytesRead);
-}
-#endif
+    static void serializeDataflashReadReply(mspPacket_t *reply, uint32_t address, int size)
+    {
+        sbuf_t *dst = &reply->buf;
+        sbufWriteU32(dst, address);
+        size = MIN(size, sbufBytesRemaining(dst));    // limit reply to available buffer space
+        // bytesRead will be lower than that requested if we reach end of volume
+        int bytesRead = flashfsReadAbs(address, sbufPtr(dst), size);
+        sbufAdvance(dst, bytesRead);
+    }
+#endif //USE_FLASHFS
 
 typedef struct pgToMSPMapEntry_s {
     pgn_t pgn;
@@ -483,6 +496,7 @@ static int processPgCommand(mspPacket_t *command, mspPacket_t *reply)
 {
     sbuf_t *src = &command->buf;
     sbuf_t *dst = &reply->buf;
+    
     int cmdLength = sbufBytesRemaining(src);
 
     // MSP IN - read config structure
@@ -538,11 +552,11 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
 
         case MSP_BOARD_INFO:
             sbufWriteData(dst, boardIdentifier, BOARD_IDENTIFIER_LENGTH);
-#ifdef USE_HARDWARE_REVISION_DETECTION
-            sbufWriteU16(dst, hardwareRevision);
-#else
-            sbufWriteU16(dst, 0); // No hardware revision available.
-#endif
+            #ifdef USE_HARDWARE_REVISION_DETECTION
+                sbufWriteU16(dst, hardwareRevision);
+            #else  //!USE_HARDWARE_REVISION_DETECTION
+                sbufWriteU16(dst, 0); // No hardware revision available.
+            #endif //USE_HARDWARE_REVISION_DETECTION
             break;
 
         case MSP_BUILD_INFO:
@@ -559,13 +573,14 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             break;
 
         case MSP_STATUS_EX:
+        
         case MSP_STATUS:
             sbufWriteU16(dst, cycleTime);
-#ifdef USE_I2C
-            sbufWriteU16(dst, i2cGetErrorCounter());
-#else
-            sbufWriteU16(dst, 0);
-#endif
+            #ifdef USE_I2C
+                sbufWriteU16(dst, i2cGetErrorCounter());
+            #else  //!USE_I2C
+                sbufWriteU16(dst, 0);
+            #endif //USE_I2C
             sbufWriteU16(dst, sensors(SENSOR_ACC) | sensors(SENSOR_BARO) << 1 | sensors(SENSOR_MAG) << 2 | sensors(SENSOR_GPS) << 3 | sensors(SENSOR_SONAR) << 4);
             sbufWriteU32(dst, packFlightModeFlags());
             sbufWriteU8(dst, getCurrentProfile());
@@ -634,21 +649,21 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             break;
 
         case MSP_ALTITUDE:
-#if defined(BARO) || defined(SONAR)
-            sbufWriteU32(dst, altitudeHoldGetEstimatedAltitude());
-            sbufWriteU16(dst, vario);
-#else
-            sbufWriteU32(dst, 0);
-            sbufWriteU16(dst, 0);
-#endif
+            #if defined(BARO) || defined(SONAR)
+                sbufWriteU32(dst, altitudeHoldGetEstimatedAltitude());
+                sbufWriteU16(dst, vario);
+            #else  //(!BARO)&&(!SONAR)
+                sbufWriteU32(dst, 0);
+                sbufWriteU16(dst, 0);
+            #endif //(BARO)&&(SONAR)
             break;
 
         case MSP_SONAR_ALTITUDE:
-#if defined(SONAR)
-            sbufWriteU32(dst, sonarGetLatestAltitude());
-#else
-            sbufWriteU32(dst, 0);
-#endif
+            #if defined(SONAR)
+                 sbufWriteU32(dst, sonarGetLatestAltitude());
+            #else  //!SONAR
+                 sbufWriteU32(dst, 0);
+            #endif //SONAR
             break;
 
         case MSP_ANALOG:
@@ -732,32 +747,27 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
 
         case MSP_MISC:
             sbufWriteU16(dst, rxConfig()->midrc);
-
             sbufWriteU16(dst, motorAndServoConfig()->minthrottle);
             sbufWriteU16(dst, motorAndServoConfig()->maxthrottle);
             sbufWriteU16(dst, motorAndServoConfig()->mincommand);
-
             sbufWriteU16(dst, failsafeConfig()->failsafe_throttle);
-
-#ifdef GPS
-            sbufWriteU8(dst, gpsConfig()->provider); // gps_type
-            sbufWriteU8(dst, 0); // TODO gps_baudrate (an index, cleanflight uses a uint32_t
-            sbufWriteU8(dst, gpsConfig()->sbasMode); // gps_ubx_sbas
-#else
-            sbufWriteU8(dst, 0); // gps_type
-            sbufWriteU8(dst, 0); // TODO gps_baudrate (an index, cleanflight uses a uint32_t
-            sbufWriteU8(dst, 0); // gps_ubx_sbas
-#endif
-            sbufWriteU8(dst, batteryConfig()->multiwiiCurrentMeterOutput);
-            sbufWriteU8(dst, rxConfig()->rssi_channel);
-            sbufWriteU8(dst, 0);
-
+            #ifdef GPS
+                sbufWriteU8(dst, gpsConfig()->provider); // gps_type
+                sbufWriteU8(dst, 0);                     // TODO gps_baudrate (an index, cleanflight uses a uint32_t
+                sbufWriteU8(dst, gpsConfig()->sbasMode); // gps_ubx_sbas
+            #else  //!GPS
+                sbufWriteU8(dst, 0); // gps_type
+                sbufWriteU8(dst, 0); // TODO gps_baudrate (an index, cleanflight uses a uint32_t
+                sbufWriteU8(dst, 0); // gps_ubx_sbas
+            #endif //GPS 
+            sbufWriteU8( dst, batteryConfig()->multiwiiCurrentMeterOutput);
+            sbufWriteU8( dst, rxConfig()->rssi_channel);
+            sbufWriteU8( dst, 0);
             sbufWriteU16(dst, compassConfig()->mag_declination / 10);
-
-            sbufWriteU8(dst, batteryConfig()->vbatscale);
-            sbufWriteU8(dst, batteryConfig()->vbatmincellvoltage);
-            sbufWriteU8(dst, batteryConfig()->vbatmaxcellvoltage);
-            sbufWriteU8(dst, batteryConfig()->vbatwarningcellvoltage);
+            sbufWriteU8( dst, batteryConfig()->vbatscale);
+            sbufWriteU8( dst, batteryConfig()->vbatmincellvoltage);
+            sbufWriteU8( dst, batteryConfig()->vbatmaxcellvoltage);
+            sbufWriteU8( dst, batteryConfig()->vbatwarningcellvoltage);
             break;
 
         case MSP_MOTOR_PINS:
@@ -766,63 +776,63 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
                 sbufWriteU8(dst, i + 1);
             break;
 
-#ifdef GPS
-        case MSP_RAW_GPS:
-            sbufWriteU8(dst, STATE(GPS_FIX));
-            sbufWriteU8(dst, GPS_numSat);
-            sbufWriteU32(dst, GPS_coord[LAT]);
-            sbufWriteU32(dst, GPS_coord[LON]);
-            sbufWriteU16(dst, GPS_altitude);
-            sbufWriteU16(dst, GPS_speed);
-            sbufWriteU16(dst, GPS_ground_course);
-            break;
-
-        case MSP_COMP_GPS:
-            sbufWriteU16(dst, GPS_distanceToHome);
-            sbufWriteU16(dst, GPS_directionToHome);
-            sbufWriteU8(dst, GPS_update & 1);
-            break;
-
-        case MSP_WP: {
-            uint8_t wp_no = sbufReadU8(src);    // get the wp number
-            int32_t lat = 0, lon = 0;
-            if (wp_no == 0) {
-                lat = GPS_home[LAT];
-                lon = GPS_home[LON];
-            } else if (wp_no == 16) {
-                lat = GPS_hold[LAT];
-                lon = GPS_hold[LON];
+        #ifdef GPS
+            case MSP_RAW_GPS:
+                sbufWriteU8( dst, STATE(GPS_FIX));
+                sbufWriteU8( dst, GPS_numSat);
+                sbufWriteU32(dst, GPS_coord[LAT]);
+                sbufWriteU32(dst, GPS_coord[LON]);
+                sbufWriteU16(dst, GPS_altitude);
+                sbufWriteU16(dst, GPS_speed);
+                sbufWriteU16(dst, GPS_ground_course);
+                break;
+    
+            case MSP_COMP_GPS:
+                sbufWriteU16(dst, GPS_distanceToHome);
+                sbufWriteU16(dst, GPS_directionToHome);
+                sbufWriteU8( dst, GPS_update & 1);
+                break;
+    
+            case MSP_WP: {
+                uint8_t wp_no = sbufReadU8(src);    // get the wp number
+                int32_t lat = 0, lon = 0;
+                if (wp_no == 0) {
+                    lat = GPS_home[LAT];
+                    lon = GPS_home[LON];
+                } else if (wp_no == 16) {
+                    lat = GPS_hold[LAT];
+                    lon = GPS_hold[LON];
+                }
+                sbufWriteU8( dst, wp_no);
+                sbufWriteU32(dst, lat);
+                sbufWriteU32(dst, lon);
+                sbufWriteU32(dst, AltHold);           // altitude (cm) will come here -- temporary implementation to test feature with apps
+                sbufWriteU16(dst, 0);                 // heading  will come here (deg)
+                sbufWriteU16(dst, 0);                 // time to stay (ms) will come here
+                sbufWriteU8( dst, 0);                 // nav flag will come here
+                break;
             }
-            sbufWriteU8(dst, wp_no);
-            sbufWriteU32(dst, lat);
-            sbufWriteU32(dst, lon);
-            sbufWriteU32(dst, AltHold);           // altitude (cm) will come here -- temporary implementation to test feature with apps
-            sbufWriteU16(dst, 0);                 // heading  will come here (deg)
-            sbufWriteU16(dst, 0);                 // time to stay (ms) will come here
-            sbufWriteU8(dst, 0);                  // nav flag will come here
-            break;
-        }
-
-        case MSP_GPSSVINFO:
-            sbufWriteU8(dst, GPS_numCh);
-            for (int i = 0; i < GPS_numCh; i++){
-                sbufWriteU8(dst, GPS_svinfo_chn[i]);
-                sbufWriteU8(dst, GPS_svinfo_svid[i]);
-                sbufWriteU8(dst, GPS_svinfo_quality[i]);
-                sbufWriteU8(dst, GPS_svinfo_cno[i]);
-            }
-            break;
-#endif
+    
+            case MSP_GPSSVINFO:
+                sbufWriteU8(dst, GPS_numCh);
+                for (int i = 0; i < GPS_numCh; i++){
+                    sbufWriteU8(dst, GPS_svinfo_chn[i]);
+                    sbufWriteU8(dst, GPS_svinfo_svid[i]);
+                    sbufWriteU8(dst, GPS_svinfo_quality[i]);
+                    sbufWriteU8(dst, GPS_svinfo_cno[i]);
+                }
+                break;
+        #endif //GPS
 
         case MSP_DEBUG:
             // output some useful QA statistics
-            // debug[x] = ((hse_value / 1000000) * 1000) + (SystemCoreClock / 1000000);         // XX0YY [crystal clock : core clock]
-
+            // debug[x] = ((hse_value / 1000000) * 1000) + (SystemCoreClock / 1000000);        
+            // XX0YY [crystal clock : core clock]
             for (int i = 0; i < DEBUG16_VALUE_COUNT; i++)
                 sbufWriteU16(dst, debug[i]);      // 4 variables are here for general monitoring purpose
             break;
 
-            // Additional commands that are not compatible with MultiWii
+        // Additional commands that are not compatible with MultiWii
         case MSP_ACC_TRIM:
             sbufWriteU16(dst, accelerometerConfig()->accelerometerTrims.values.pitch);
             sbufWriteU16(dst, accelerometerConfig()->accelerometerTrims.values.roll);
@@ -848,7 +858,7 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
         case MSP_CURRENT_METER_CONFIG:
             sbufWriteU16(dst, batteryConfig()->currentMeterScale);
             sbufWriteU16(dst, batteryConfig()->currentMeterOffset);
-            sbufWriteU8(dst, batteryConfig()->currentMeterType);
+            sbufWriteU8( dst, batteryConfig()->currentMeterType);
             sbufWriteU16(dst, batteryConfig()->batteryCapacity);
             break;
 
@@ -883,16 +893,12 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             break;
 
         case MSP_BF_CONFIG:
-            sbufWriteU8(dst, 0);
-
+            sbufWriteU8( dst, 0);
             sbufWriteU32(dst, featureMask());
-
-            sbufWriteU8(dst, rxConfig()->serialrx_provider);
-
+            sbufWriteU8( dst, rxConfig()->serialrx_provider);
             sbufWriteU16(dst, boardAlignment()->rollDegrees);
             sbufWriteU16(dst, boardAlignment()->pitchDegrees);
             sbufWriteU16(dst, boardAlignment()->yawDegrees);
-
             sbufWriteU16(dst, batteryConfig()->currentMeterScale);
             sbufWriteU16(dst, batteryConfig()->currentMeterOffset);
             break;
@@ -911,69 +917,68 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             }
             break;
 
-#ifdef LED_STRIP
-        case MSP_LED_COLORS:
-            for (int i = 0; i < LED_CONFIGURABLE_COLOR_COUNT; i++) {
-                hsvColor_t *color = colors(i);
-                sbufWriteU16(dst, color->h);
-                sbufWriteU8(dst, color->s);
-                sbufWriteU8(dst, color->v);
-            }
-            break;
-
-        case MSP_LED_STRIP_CONFIG:
-            for (int i = 0; i < LED_MAX_STRIP_LENGTH; i++) {
-                ledConfig_t *ledConfig = ledConfigs(i);
-                sbufWriteU16(dst, (ledConfig->flags & LED_FLAG_DIRECTION_MASK) >> LED_DIRECTION_BIT_OFFSET);
-                sbufWriteU16(dst, (ledConfig->flags & LED_FLAG_FUNCTION_MASK) >> LED_FUNCTION_BIT_OFFSET);
-                sbufWriteU8(dst, ledGetX(ledConfig));
-                sbufWriteU8(dst, ledGetY(ledConfig));
-                sbufWriteU8(dst, ledConfig->color);
-            }
-            break;
-
-        case MSP_LED_STRIP_MODECOLOR:
-            for (int i = 0; i < LED_MODE_COUNT; i++) {
-                for (int j = 0; j < LED_DIRECTION_COUNT; j++) {
-                    sbufWriteU8(dst, i);
-                    sbufWriteU8(dst, j);
-                    sbufWriteU8(dst, modeColors(i)->color[j]);
+        #ifdef LED_STRIP
+            case MSP_LED_COLORS:
+                for (int i = 0; i < LED_CONFIGURABLE_COLOR_COUNT; i++) {
+                    hsvColor_t *color = colors(i);
+                    sbufWriteU16(dst, color->h);
+                    sbufWriteU8(dst, color->s);
+                    sbufWriteU8(dst, color->v);
                 }
-            }
-            for (int j = 0; j < LED_SPECIAL_COLOR_COUNT; j++) {
-                sbufWriteU8(dst, LED_MODE_COUNT);
-                sbufWriteU8(dst, j);
-                sbufWriteU8(dst, specialColors(0)->color[j]);
-            }
-            break;
-#endif
+                break;
+    
+            case MSP_LED_STRIP_CONFIG:
+                for (int i = 0; i < LED_MAX_STRIP_LENGTH; i++) {
+                    ledConfig_t *ledConfig = ledConfigs(i);
+                    sbufWriteU16(dst, (ledConfig->flags & LED_FLAG_DIRECTION_MASK) >> LED_DIRECTION_BIT_OFFSET);
+                    sbufWriteU16(dst, (ledConfig->flags & LED_FLAG_FUNCTION_MASK) >> LED_FUNCTION_BIT_OFFSET);
+                    sbufWriteU8(dst, ledGetX(ledConfig));
+                    sbufWriteU8(dst, ledGetY(ledConfig));
+                    sbufWriteU8(dst, ledConfig->color);
+                }
+                break;
+    
+            case MSP_LED_STRIP_MODECOLOR:
+                for (int i = 0; i < LED_MODE_COUNT; i++) {
+                    for (int j = 0; j < LED_DIRECTION_COUNT; j++) {
+                        sbufWriteU8(dst, i);
+                        sbufWriteU8(dst, j);
+                        sbufWriteU8(dst, modeColors(i)->color[j]);
+                    }
+                }
+                for (int j = 0; j < LED_SPECIAL_COLOR_COUNT; j++) {
+                    sbufWriteU8(dst, LED_MODE_COUNT);
+                    sbufWriteU8(dst, j);
+                    sbufWriteU8(dst, specialColors(0)->color[j]);
+                }
+                break;
+        #endif //LED_STRIP
 
         case MSP_DATAFLASH_SUMMARY:
             serializeDataflashSummaryReply(reply);
             break;
 
-#ifdef USE_FLASHFS
-        case MSP_DATAFLASH_READ: {
-            uint32_t readAddress = sbufReadU32(src);
-
-            serializeDataflashReadReply(reply, readAddress, 128);
-            break;
-        }
-#endif
+        #ifdef USE_FLASHFS
+            case MSP_DATAFLASH_READ: {
+                uint32_t readAddress = sbufReadU32(src);
+    
+                serializeDataflashReadReply(reply, readAddress, 128);
+                break;
+            }
+        #endif //USE_FLASHFS
 
         case MSP_BLACKBOX_CONFIG:
-
-#ifdef BLACKBOX
-            sbufWriteU8(dst, 1); //Blackbox supported
-            sbufWriteU8(dst, blackboxConfig()->device);
-            sbufWriteU8(dst, blackboxConfig()->rate_num);
-            sbufWriteU8(dst, blackboxConfig()->rate_denom);
-#else
-            sbufWriteU8(dst, 0); // Blackbox not supported
-            sbufWriteU8(dst, 0);
-            sbufWriteU8(dst, 0);
-            sbufWriteU8(dst, 0);
-#endif
+            #ifdef BLACKBOX
+                sbufWriteU8(dst, 1); //Blackbox supported
+                sbufWriteU8(dst, blackboxConfig()->device);
+                sbufWriteU8(dst, blackboxConfig()->rate_num);
+                sbufWriteU8(dst, blackboxConfig()->rate_denom);
+            #else
+                sbufWriteU8(dst, 0); // Blackbox not supported
+                sbufWriteU8(dst, 0);
+                sbufWriteU8(dst, 0);
+                sbufWriteU8(dst, 0);
+            #endif
             break;
 
         case MSP_SDCARD_SUMMARY:
@@ -981,18 +986,18 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             break;
 
         case MSP_TRANSPONDER_CONFIG:
-#ifdef TRANSPONDER
-            sbufWriteU8(dst, 1); //Transponder supported
-            sbufWriteData(dst, transponderConfig()->data, sizeof(transponderConfig()->data));
-#else
-            sbufWriteU8(dst, 0); // Transponder not supported
-#endif
+            #ifdef TRANSPONDER
+                sbufWriteU8(  dst, 1); //Transponder supported
+                sbufWriteData(dst, transponderConfig()->data, sizeof(transponderConfig()->data));
+            #else  //!TRANSPONDER
+                sbufWriteU8(dst, 0); // Transponder not supported
+            #endif //TRANSPONDER
             break;
 
         case MSP_BF_BUILD_INFO:
             sbufWriteData(dst, buildDate, 11); // MMM DD YYYY as ascii, MMM = Jan/Feb... etc
-            sbufWriteU32(dst, 0); // future exp
-            sbufWriteU32(dst, 0); // future exp
+            sbufWriteU32( dst, 0);             // future exp
+            sbufWriteU32( dst, 0);             // future exp
             break;
 
         case MSP_3D:
@@ -1000,9 +1005,9 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             break;
 
         case MSP_RC_DEADBAND:
-            sbufWriteU8(dst, rcControlsConfig()->deadband);
-            sbufWriteU8(dst, rcControlsConfig()->yaw_deadband);
-            sbufWriteU8(dst, rcControlsConfig()->alt_hold_deadband);
+            sbufWriteU8( dst, rcControlsConfig()->deadband);
+            sbufWriteU8( dst, rcControlsConfig()->yaw_deadband);
+            sbufWriteU8( dst, rcControlsConfig()->alt_hold_deadband);
             sbufWriteU16(dst, rcControlsConfig()->deadband3d_throttle);
             break;
 
@@ -1012,13 +1017,13 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             sbufWriteU8(dst, sensorAlignmentConfig()->mag_align);
             break;
 
-#ifdef USE_SERIAL_4WAY_BLHELI_INTERFACE
-        case MSP_SET_4WAY_IF:
-            // initialize 4way ESC interface, return number of ESCs available
-            sbufWriteU8(dst, esc4wayInit());
-            mspEnterEsc4way = true;     // request protocol switch
-            break;
-#endif
+        #ifdef USE_SERIAL_4WAY_BLHELI_INTERFACE
+            case MSP_SET_4WAY_IF:
+                // initialize 4way ESC interface, return number of ESCs available
+                sbufWriteU8(dst, esc4wayInit());
+                mspEnterEsc4way = true;     // request protocol switch
+                break;
+        #endif //USE_SERIAL_4WAY_BLHELI_INTERFACE
 
         default:
             return 0;   // unknown command
@@ -1045,15 +1050,12 @@ static int processInCommand(mspPacket_t *cmd)
             break;
 
         case MSP_SET_RAW_RC: {
-            uint8_t channelCount = len / sizeof(uint16_t);
+            uint8_t  channelCount = len / sizeof(uint16_t);
+            uint16_t frame[MAX_SUPPORTED_RC_CHANNEL_COUNT];
             if (channelCount > MAX_SUPPORTED_RC_CHANNEL_COUNT)
                 return -1;
-            uint16_t frame[MAX_SUPPORTED_RC_CHANNEL_COUNT];
-
-            for (unsigned i = 0; i < channelCount; i++) {
+            for (unsigned i = 0; i < channelCount; i++) 
                 frame[i] = sbufReadU16(src);
-            }
-
             rxMspFrameReceive(frame, channelCount);
             break;
         }
@@ -1079,10 +1081,10 @@ static int processInCommand(mspPacket_t *cmd)
 
         case MSP_SET_PID:
             for (int i = 0; i < PID_ITEM_COUNT; i++) {
-                    pidProfile()->P8[i] = sbufReadU8(src);
-                    pidProfile()->I8[i] = sbufReadU8(src);
-                    pidProfile()->D8[i] = sbufReadU8(src);
-                }
+                pidProfile()->P8[i] = sbufReadU8(src);
+                pidProfile()->I8[i] = sbufReadU8(src);
+                pidProfile()->D8[i] = sbufReadU8(src);
+            }
             break;
 
         case MSP_SET_MODE_RANGE: {
@@ -1094,11 +1096,10 @@ static int processInCommand(mspPacket_t *cmd)
             const box_t *box = findBoxByPermenantId(permId);
             if (box == NULL)
                 return -1;
-            mac->modeId = box->boxId;
+            mac->modeId          = box->boxId;
             mac->auxChannelIndex = sbufReadU8(src);
             mac->range.startStep = sbufReadU8(src);
-            mac->range.endStep = sbufReadU8(src);
-
+            mac->range.endStep   = sbufReadU8(src);
             useRcControlsConfig(modeActivationProfile()->modeActivationConditions);
             break;
         }
@@ -1139,38 +1140,32 @@ static int processInCommand(mspPacket_t *cmd)
             currentControlRateProfile->rcYawExpo8 = sbufReadU8(src);
             break;
 
-        case MSP_SET_MISC: {
+        case MSP_SET_MISC: 
             unsigned midrc = sbufReadU16(src);
             if (midrc > 1400 && midrc < 1600)
                 rxConfig()->midrc = midrc;
-
-            motorAndServoConfig()->minthrottle = sbufReadU16(src);
-            motorAndServoConfig()->maxthrottle = sbufReadU16(src);
-            motorAndServoConfig()->mincommand = sbufReadU16(src);
-
+            motorAndServoConfig()->minthrottle  = sbufReadU16(src);
+            motorAndServoConfig()->maxthrottle  = sbufReadU16(src);
+            motorAndServoConfig()->mincommand   = sbufReadU16(src);
             failsafeConfig()->failsafe_throttle = sbufReadU16(src);
-
-#ifdef GPS
-            gpsConfig()->provider = sbufReadU8(src); // gps_type
-            sbufReadU8(src); // gps_baudrate
-            gpsConfig()->sbasMode = sbufReadU8(src); // gps_ubx_sbas
-#else
-            sbufReadU8(src); // gps_type
-            sbufReadU8(src); // gps_baudrate
-            sbufReadU8(src); // gps_ubx_sbas
-#endif
+            #ifdef GPS
+                gpsConfig()->provider = sbufReadU8(src); // gps_type
+                sbufReadU8(src);                         // gps_baudrate
+                gpsConfig()->sbasMode = sbufReadU8(src); // gps_ubx_sbas
+            #else //!GPS
+                sbufReadU8(src); // gps_type
+                sbufReadU8(src); // gps_baudrate
+                sbufReadU8(src); // gps_ubx_sbas
+            #endif //GPS
             batteryConfig()->multiwiiCurrentMeterOutput = sbufReadU8(src);
-            rxConfig()->rssi_channel = sbufReadU8(src);
+            rxConfig()->rssi_channel                    = sbufReadU8(src);
             sbufReadU8(src);
-
-            compassConfig()->mag_declination = sbufReadU16(src) * 10;
-
-            batteryConfig()->vbatscale = sbufReadU8(src);           // actual vbatscale as intended
-            batteryConfig()->vbatmincellvoltage = sbufReadU8(src);  // vbatlevel_warn1 in MWC2.3 GUI
-            batteryConfig()->vbatmaxcellvoltage = sbufReadU8(src);  // vbatlevel_warn2 in MWC2.3 GUI
+            compassConfig()->mag_declination        = sbufReadU16(src) * 10;
+            batteryConfig()->vbatscale              = sbufReadU8(src);  // actual vbatscale as intended
+            batteryConfig()->vbatmincellvoltage     = sbufReadU8(src);  // vbatlevel_warn1 in MWC2.3 GUI
+            batteryConfig()->vbatmaxcellvoltage     = sbufReadU8(src);  // vbatlevel_warn2 in MWC2.3 GUI
             batteryConfig()->vbatwarningcellvoltage = sbufReadU8(src);  // vbatlevel when buzzer starts to alert
             break;
-        }
 
         case MSP_SET_MOTOR:
             for (int i = 0; i < 8; i++) {
@@ -1181,29 +1176,26 @@ static int processInCommand(mspPacket_t *cmd)
             }
             break;
 
-        case MSP_SET_SERVO_CONFIGURATION: {
+        case MSP_SET_SERVO_CONFIGURATION: 
             if (len != 1 + sizeof(servoParam_t))
                 return -1;
             unsigned i = sbufReadU8(src);
             if (i >= MAX_SUPPORTED_SERVOS)
                 return -1;
-
-            servoConfVTOL[i].min     = sbufReadU16(src);
-            servoConfVTOL[i].max     = sbufReadU16(src);
-            servoConfVTOL[i].middle  = sbufReadU16(src);
-            servoConfVTOL[i].rate    = sbufReadU8(src);
-            servoConfVTOL[i].angleAtMin = sbufReadU8(src);
-            servoConfVTOL[i].angleAtMax = sbufReadU8(src);
+            servoConfVTOL[i].min                = sbufReadU16(src);
+            servoConfVTOL[i].max                = sbufReadU16(src);
+            servoConfVTOL[i].middle             = sbufReadU16(src);
+            servoConfVTOL[i].rate               = sbufReadU8(src);
+            servoConfVTOL[i].angleAtMin         = sbufReadU8(src);
+            servoConfVTOL[i].angleAtMax         = sbufReadU8(src);
             servoConfVTOL[i].forwardFromChannel = sbufReadU8(src);
             servoConfVTOL[i].reversedSources    = sbufReadU32(src);
             break;
-        }
 
-        case MSP_SET_SERVO_MIX_RULE: {
+        case MSP_SET_SERVO_MIX_RULE: 
             int i = sbufReadU8(src);
             if (i >= MAX_SUPPORTED_SERVOS)
                 return -1;
-
             servoMixerVTOL[i].targetChannel = sbufReadU8(src);
             servoMixerVTOL[i].inputSource   = sbufReadU8(src);
             servoMixerVTOL[i].rate          = sbufReadU8(src);
@@ -1212,15 +1204,14 @@ static int processInCommand(mspPacket_t *cmd)
             servoMixerVTOL[i].max           = sbufReadU8(src);
             servoMixerVTOL[i].box           = sbufReadU8(src);
             break;
-        }
 
         case MSP_SET_3D:
             break;
 
         case MSP_SET_RC_DEADBAND:
-            rcControlsConfig()->deadband = sbufReadU8(src);
-            rcControlsConfig()->yaw_deadband = sbufReadU8(src);
-            rcControlsConfig()->alt_hold_deadband = sbufReadU8(src);
+            rcControlsConfig()->deadband            = sbufReadU8(src);
+            rcControlsConfig()->yaw_deadband        = sbufReadU8(src);
+            rcControlsConfig()->alt_hold_deadband   = sbufReadU8(src);
             rcControlsConfig()->deadband3d_throttle = sbufReadU16(src);
             break;
 
@@ -1230,8 +1221,8 @@ static int processInCommand(mspPacket_t *cmd)
 
         case MSP_SET_SENSOR_ALIGNMENT:
             sensorAlignmentConfig()->gyro_align = sbufReadU8(src);
-            sensorAlignmentConfig()->acc_align = sbufReadU8(src);
-            sensorAlignmentConfig()->mag_align = sbufReadU8(src);
+            sensorAlignmentConfig()->acc_align  = sbufReadU8(src);
+            sensorAlignmentConfig()->mag_align  = sbufReadU8(src);
             break;
 
         case MSP_RESET_CONF:
@@ -1258,73 +1249,73 @@ static int processInCommand(mspPacket_t *cmd)
             readEEPROM();
             break;
 
-#ifdef BLACKBOX
-        case MSP_SET_BLACKBOX_CONFIG:
-            // Don't allow config to be updated while Blackbox is logging
-            if (!blackboxMayEditConfig())
-                return -1;
-            blackboxConfig()->device = sbufReadU8(src);
-            blackboxConfig()->rate_num = sbufReadU8(src);
-            blackboxConfig()->rate_denom = sbufReadU8(src);
-            break;
-#endif
+        #ifdef BLACKBOX
+            case MSP_SET_BLACKBOX_CONFIG:
+                // Don't allow config to be updated while Blackbox is logging
+                if (!blackboxMayEditConfig())
+                    return -1;
+                blackboxConfig()->device = sbufReadU8(src);
+                blackboxConfig()->rate_num = sbufReadU8(src);
+                blackboxConfig()->rate_denom = sbufReadU8(src);
+                break;
+        #endif //BLACKBOX
 
-#ifdef TRANSPONDER
-        case MSP_SET_TRANSPONDER_CONFIG:
-            if (len != sizeof(transponderConfig()->data))
-                return -1;
-            sbufReadData(src, transponderConfig()->data, sizeof(transponderConfig()->data));
-            transponderUpdateData(transponderConfig()->data);
-            break;
-#endif
+        #ifdef TRANSPONDER
+            case MSP_SET_TRANSPONDER_CONFIG:
+                if (len != sizeof(transponderConfig()->data))
+                    return -1;
+                sbufReadData(src, transponderConfig()->data, sizeof(transponderConfig()->data));
+                transponderUpdateData(transponderConfig()->data);
+                break;
+        #endif //TRANSPONDER
 
-#ifdef USE_FLASHFS
-        case MSP_DATAFLASH_ERASE:
-            flashfsEraseCompletely();
-            break;
-#endif
+        #ifdef USE_FLASHFS
+            case MSP_DATAFLASH_ERASE:
+                flashfsEraseCompletely();
+                break;
+        #endif //USE_FLASHFS
 
-#ifdef GPS
-        case MSP_SET_RAW_GPS:
-            if (sbufReadU8(src)) {
-                ENABLE_STATE(GPS_FIX);
-            } else {
-                DISABLE_STATE(GPS_FIX);
+        #ifdef GPS
+            case MSP_SET_RAW_GPS:
+                if (sbufReadU8(src)) {
+                    ENABLE_STATE(GPS_FIX);
+                } else {
+                    DISABLE_STATE(GPS_FIX);
+                }
+                GPS_numSat     = sbufReadU8(src);
+                GPS_coord[LAT] = sbufReadU32(src);
+                GPS_coord[LON] = sbufReadU32(src);
+                GPS_altitude   = sbufReadU16(src);
+                GPS_speed      = sbufReadU16(src);
+                GPS_update    |= 2;        // New data signalisation to GPS functions // FIXME Magic Numbers
+                break;
+    
+            case MSP_SET_WP: {
+                uint8_t wp_no = sbufReadU8(src);             // get the wp number
+                int32_t lat   = sbufReadU32(src);
+                int32_t lon   = sbufReadU32(src);
+                int32_t alt   = sbufReadU32(src);            // to set altitude (cm)
+                sbufReadU16(src);                            // future: to set heading (deg)
+                sbufReadU16(src);                            // future: to set time to stay (ms)
+                sbufReadU8(src);                             // future: to set nav flag
+                if (wp_no == 0) {
+                    GPS_home[LAT] = lat;
+                    GPS_home[LON] = lon;
+                    DISABLE_FLIGHT_MODE(GPS_HOME_MODE);     // with this flag, GPS_set_next_wp will be called in the next loop -- OK with SERIAL GPS / OK with I2C GPS
+                    ENABLE_STATE(GPS_FIX_HOME);
+                    if (alt != 0)
+                        AltHold = alt;                      // temporary implementation to test feature with apps
+                } else if (wp_no == 16) {                   // OK with SERIAL GPS  --  NOK for I2C GPS / needs more code dev in order to inject GPS coord inside I2C GPS
+                    GPS_hold[LAT] = lat;
+                    GPS_hold[LON] = lon;
+                    if (alt != 0)
+                        AltHold = alt;                      // temporary implementation to test feature with apps
+                    nav_mode = NAV_MODE_WP;
+                    GPS_set_next_wp(&GPS_hold[LAT], &GPS_hold[LON]);
+                }
+                break;
             }
-            GPS_numSat = sbufReadU8(src);
-            GPS_coord[LAT] = sbufReadU32(src);
-            GPS_coord[LON] = sbufReadU32(src);
-            GPS_altitude = sbufReadU16(src);
-            GPS_speed = sbufReadU16(src);
-            GPS_update |= 2;        // New data signalisation to GPS functions // FIXME Magic Numbers
-            break;
-
-        case MSP_SET_WP: {
-            uint8_t wp_no = sbufReadU8(src);             // get the wp number
-            int32_t lat = sbufReadU32(src);
-            int32_t lon = sbufReadU32(src);
-            int32_t alt = sbufReadU32(src);              // to set altitude (cm)
-            sbufReadU16(src);                            // future: to set heading (deg)
-            sbufReadU16(src);                            // future: to set time to stay (ms)
-            sbufReadU8(src);                             // future: to set nav flag
-            if (wp_no == 0) {
-                GPS_home[LAT] = lat;
-                GPS_home[LON] = lon;
-                DISABLE_FLIGHT_MODE(GPS_HOME_MODE);     // with this flag, GPS_set_next_wp will be called in the next loop -- OK with SERIAL GPS / OK with I2C GPS
-                ENABLE_STATE(GPS_FIX_HOME);
-                if (alt != 0)
-                    AltHold = alt;                      // temporary implementation to test feature with apps
-            } else if (wp_no == 16) {                   // OK with SERIAL GPS  --  NOK for I2C GPS / needs more code dev in order to inject GPS coord inside I2C GPS
-                GPS_hold[LAT] = lat;
-                GPS_hold[LON] = lon;
-                if (alt != 0)
-                    AltHold = alt;                      // temporary implementation to test feature with apps
-                nav_mode = NAV_MODE_WP;
-                GPS_set_next_wp(&GPS_hold[LAT], &GPS_hold[LON]);
-            }
-            break;
-        }
-#endif
+        #endif //GPS
 
         case MSP_SET_FEATURE:
             featureClearAll();
@@ -1332,17 +1323,17 @@ static int processInCommand(mspPacket_t *cmd)
             break;
 
         case MSP_SET_VOLTAGE_METER_CONFIG:
-            batteryConfig()->vbatscale = sbufReadU8(src);               // actual vbatscale as intended
-            batteryConfig()->vbatmincellvoltage = sbufReadU8(src);      // vbatlevel_warn1 in MWC2.3 GUI
-            batteryConfig()->vbatmaxcellvoltage = sbufReadU8(src);      // vbatlevel_warn2 in MWC2.3 GUI
-            batteryConfig()->vbatwarningcellvoltage = sbufReadU8(src);  // vbatlevel when buzzer starts to alert
+            batteryConfig()->vbatscale              = sbufReadU8(src); // actual vbatscale as intended
+            batteryConfig()->vbatmincellvoltage     = sbufReadU8(src); // vbatlevel_warn1 in MWC2.3 GUI
+            batteryConfig()->vbatmaxcellvoltage     = sbufReadU8(src); // vbatlevel_warn2 in MWC2.3 GUI
+            batteryConfig()->vbatwarningcellvoltage = sbufReadU8(src); // vbatlevel when buzzer starts to alert
             break;
 
         case MSP_SET_CURRENT_METER_CONFIG:
-            batteryConfig()->currentMeterScale = sbufReadU16(src);
+            batteryConfig()->currentMeterScale  = sbufReadU16(src);
             batteryConfig()->currentMeterOffset = sbufReadU16(src);
-            batteryConfig()->currentMeterType = sbufReadU8(src);
-            batteryConfig()->batteryCapacity = sbufReadU16(src);
+            batteryConfig()->currentMeterType   = sbufReadU8(src);
+            batteryConfig()->batteryCapacity    = sbufReadU16(src);
             break;
 
         case MSP_SET_MIXER:
@@ -1351,9 +1342,9 @@ static int processInCommand(mspPacket_t *cmd)
 
         case MSP_SET_RX_CONFIG:
             rxConfig()->serialrx_provider = sbufReadU8(src);
-            rxConfig()->maxcheck = sbufReadU16(src);
-            rxConfig()->midrc = sbufReadU16(src);
-            rxConfig()->mincheck = sbufReadU16(src);
+            rxConfig()->maxcheck          = sbufReadU16(src);
+            rxConfig()->midrc             = sbufReadU16(src);
+            rxConfig()->mincheck          = sbufReadU16(src);
             rxConfig()->spektrum_sat_bind = sbufReadU8(src);
             if (sbufBytesRemaining(src) < 2)
                 break;
@@ -1382,101 +1373,84 @@ static int processInCommand(mspPacket_t *cmd)
 
         case MSP_SET_BF_CONFIG:
             sbufReadU8(src);
-
             featureClearAll();
             featureSet(sbufReadU32(src));                      // features bitmap
-
-            rxConfig()->serialrx_provider = sbufReadU8(src);   // serialrx_type
-
-            boardAlignment()->rollDegrees = sbufReadU16(src);  // board_align_roll
-            boardAlignment()->pitchDegrees = sbufReadU16(src); // board_align_pitch
-            boardAlignment()->yawDegrees = sbufReadU16(src);   // board_align_yaw
-
-            batteryConfig()->currentMeterScale = sbufReadU16(src);
+            rxConfig()->serialrx_provider       = sbufReadU8(src);  // serialrx_type
+            boardAlignment()->rollDegrees       = sbufReadU16(src); // board_align_roll
+            boardAlignment()->pitchDegrees      = sbufReadU16(src); // board_align_pitch
+            boardAlignment()->yawDegrees        = sbufReadU16(src); // board_align_yaw
+            batteryConfig()->currentMeterScale  = sbufReadU16(src);
             batteryConfig()->currentMeterOffset = sbufReadU16(src);
             break;
 
         case MSP_SET_CF_SERIAL_CONFIG: {
             int portConfigSize = sizeof(uint8_t) + sizeof(uint16_t) + (sizeof(uint8_t) * 4);
-
             if (len % portConfigSize != 0)
                 return -1;
-
             while (sbufBytesRemaining(src) >= portConfigSize) {
-                uint8_t identifier = sbufReadU8(src);
-
+                uint8_t             identifier = sbufReadU8(src);
                 serialPortConfig_t *portConfig = serialFindPortConfiguration(identifier);
                 if (!portConfig)
                     return -1;
-
-                portConfig->identifier = identifier;
-                portConfig->functionMask = sbufReadU16(src);
-                portConfig->msp_baudrateIndex = sbufReadU8(src);
-                portConfig->gps_baudrateIndex = sbufReadU8(src);
+                portConfig->identifier              = identifier;
+                portConfig->functionMask            = sbufReadU16(src);
+                portConfig->msp_baudrateIndex       = sbufReadU8(src);
+                portConfig->gps_baudrateIndex       = sbufReadU8(src);
                 portConfig->telemetry_baudrateIndex = sbufReadU8(src);
-                portConfig->blackbox_baudrateIndex = sbufReadU8(src);
+                portConfig->blackbox_baudrateIndex  = sbufReadU8(src);
             }
             break;
         }
 
-#ifdef LED_STRIP
-        case MSP_SET_LED_COLORS:
-
-            for (int i = 0; i < LED_CONFIGURABLE_COLOR_COUNT && sbufBytesRemaining(src) >= 4; i++) {
-                hsvColor_t *color = colors(i);
-
-                int h = sbufReadU16(src);
-                int s = sbufReadU8(src);
-                int v = sbufReadU8(src);
-
-                if (h > HSV_HUE_MAX || s > HSV_SATURATION_MAX || v > HSV_VALUE_MAX) {
-                    memset(color, 0, sizeof(*color));
-                    return -1;
+        #ifdef LED_STRIP
+            case MSP_SET_LED_COLORS:
+                for (int i = 0; i < LED_CONFIGURABLE_COLOR_COUNT && sbufBytesRemaining(src) >= 4; i++) {
+                    hsvColor_t *color = colors(i);
+                    int         h = sbufReadU16(src);
+                    int         s = sbufReadU8(src);
+                    int         v = sbufReadU8(src);
+                    if (h > HSV_HUE_MAX || s > HSV_SATURATION_MAX || v > HSV_VALUE_MAX) {
+                        memset(color, 0, sizeof(*color));
+                        return -1;
+                    }
+                    color->h = h;
+                    color->s = s;
+                    color->v = v;
                 }
-
-                color->h = h;
-                color->s = s;
-                color->v = v;
-            }
-            break;
-
-        case MSP_SET_LED_STRIP_CONFIG: {
-            int i = sbufReadU8(src);
-            if (len != (1 + 7) || i >= LED_MAX_STRIP_LENGTH)
-                return -1;
-
-            ledConfig_t *ledConfig = ledConfigs(i);
-            uint16_t mask;
-            uint16_t flags;
-            // currently we're storing directions and functions in a uint16 (flags)
-            // the msp uses 2 x uint16_t to cater for future expansion
-            mask = sbufReadU16(src);
-            flags = (mask << LED_DIRECTION_BIT_OFFSET) & LED_FLAG_DIRECTION_MASK;
-            mask = sbufReadU16(src);
-            flags |= (mask << LED_FUNCTION_BIT_OFFSET) & LED_FLAG_FUNCTION_MASK;
-            ledConfig->flags = flags;
-
-            int x = sbufReadU8(src);
-            int y = sbufReadU8(src);
-            ledSetXY(ledConfig, x, y);
-
-            ledConfig->color = sbufReadU8(src);
-
-            reevalulateLedConfig();
-        }
-        break;
-
-        case MSP_SET_LED_STRIP_MODECOLOR:
-            while (sbufBytesRemaining(src) >= 3) {
-                ledModeIndex_e modeIdx = sbufReadU8(src);
-                int funIdx = sbufReadU8(src);
-                int color = sbufReadU8(src);
-
-                if (!setModeColor(modeIdx, funIdx, color))
+                break;
+    
+            case MSP_SET_LED_STRIP_CONFIG: {
+                int i = sbufReadU8(src);
+                if (len != (1 + 7) || i >= LED_MAX_STRIP_LENGTH)
                     return -1;
+                ledConfig_t *ledConfig = ledConfigs(i);
+                uint16_t     mask;
+                uint16_t     flags;
+                // currently we're storing directions and functions in a uint16 (flags)
+                // the msp uses 2 x uint16_t to cater for future expansion
+                mask   = sbufReadU16(src);
+                flags  = (mask << LED_DIRECTION_BIT_OFFSET) & LED_FLAG_DIRECTION_MASK;
+                mask   = sbufReadU16(src);
+                flags |= (mask << LED_FUNCTION_BIT_OFFSET) & LED_FLAG_FUNCTION_MASK;
+                ledConfig->flags = flags;
+                int x = sbufReadU8(src);
+                int y = sbufReadU8(src);
+                ledSetXY(ledConfig, x, y);
+                ledConfig->color = sbufReadU8(src);
+                reevalulateLedConfig();
             }
             break;
-#endif
+    
+            case MSP_SET_LED_STRIP_MODECOLOR:
+                while (sbufBytesRemaining(src) >= 3) {
+                    ledModeIndex_e modeIdx = sbufReadU8(src);
+                    int funIdx = sbufReadU8(src);
+                    int color = sbufReadU8(src);
+                    if (!setModeColor(modeIdx, funIdx, color))
+                        return -1;
+                }
+                break;
+        #endif //LED_STRIP
 
         case MSP_REBOOT:
             isRebootScheduled = true;

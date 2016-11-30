@@ -17,15 +17,17 @@
 
 #pragma once
 
+// DEFINITIONS
 typedef struct mspPacket_s {
     sbuf_t buf;
     int16_t cmd;
     int16_t result;
 } mspPacket_t;
 
+// VARIABLES GLOBALES
 extern bool isRebootScheduled;
 extern bool mspEnterEsc4way;
 
+// FONCTION 
 void mspInit(void);
-
-int mspProcess(mspPacket_t *command, mspPacket_t *reply);
+int  mspProcess(mspPacket_t *command, mspPacket_t *reply);
