@@ -181,7 +181,7 @@ static const char pidnames[] =
     "LEVEL;"
     "MAG;"
     "VEL;";
-    
+
 // -- Variables Static
 // mask of enabled IDs, calculated on start based on enabled features. boxId_e is used as bit index.
 static uint32_t activeBoxIds;
@@ -243,7 +243,7 @@ static void initActiveBoxIds(void)
     uint32_t ena = 0;
 
     ena |= 1 << BOXARM;
-    
+
     if (sensors(SENSOR_ACC)) {
         ena |= 1 << BOXANGLE;
         ena |= 1 << BOXHORIZON;
@@ -353,7 +353,7 @@ static uint32_t packFlightModeFlags(void)
                 boxEnabledMask |= 1 << i;
         }
     #undef BM
-    
+
     // copy ARM state
     if(ARMING_FLAG(ARMED))
         boxEnabledMask |= 1 << BOXARM;
@@ -378,9 +378,9 @@ static void serializeSDCardSummaryReply(mspPacket_t *reply)
     #ifdef USE_SDCARD
         uint8_t flags = MSP_SDCARD_FLAG_SUPPORTTED;
         uint8_t state;
-    
+
         sbufWriteU8(dst, flags);
-    
+
         // Merge the card and filesystem states together
         if (!sdcard_isInserted()) {
             state = MSP_SDCARD_STATE_NOT_PRESENT;
@@ -407,7 +407,7 @@ static void serializeSDCardSummaryReply(mspPacket_t *reply)
         }
         sbufWriteU8(dst, state);
         sbufWriteU8(dst, afatfs_getLastError());
-        
+
         sbufWriteU32(dst, afatfs_getContiguousFreeSpace() / 1024);  // Write free space and total space in kilobytes
         sbufWriteU32(dst, sdcard_getMetadata()->numBlocks / 2);     // Block size is half a kilobyte
     #else //!USE_SD_CARD
@@ -425,7 +425,7 @@ static void serializeDataflashSummaryReply(mspPacket_t *reply)
     #ifdef USE_FLASHFS
         const flashGeometry_t *geometry = flashfsGetGeometry();
         uint8_t flags = (flashfsIsReady() ? MSP_FLASHFS_BIT_READY : 0) | MSP_FLASHFS_BIT_SUPPORTED;
-    
+
         sbufWriteU8(dst, flags);
         sbufWriteU32(dst, geometry->sectors);
         sbufWriteU32(dst, geometry->totalSize);
@@ -496,7 +496,7 @@ static int processPgCommand(mspPacket_t *command, mspPacket_t *reply)
 {
     sbuf_t *src = &command->buf;
     sbuf_t *dst = &reply->buf;
-    
+
     int cmdLength = sbufBytesRemaining(src);
 
     // MSP IN - read config structure
@@ -573,7 +573,7 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             break;
 
         case MSP_STATUS_EX:
-        
+
         case MSP_STATUS:
             sbufWriteU16(dst, cycleTime);
             #ifdef USE_I2C
@@ -759,7 +759,7 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
                 sbufWriteU8(dst, 0); // gps_type
                 sbufWriteU8(dst, 0); // TODO gps_baudrate (an index, cleanflight uses a uint32_t
                 sbufWriteU8(dst, 0); // gps_ubx_sbas
-            #endif //GPS 
+            #endif //GPS
             sbufWriteU8( dst, batteryConfig()->multiwiiCurrentMeterOutput);
             sbufWriteU8( dst, rxConfig()->rssi_channel);
             sbufWriteU8( dst, 0);
@@ -786,13 +786,13 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
                 sbufWriteU16(dst, GPS_speed);
                 sbufWriteU16(dst, GPS_ground_course);
                 break;
-    
+
             case MSP_COMP_GPS:
                 sbufWriteU16(dst, GPS_distanceToHome);
                 sbufWriteU16(dst, GPS_directionToHome);
                 sbufWriteU8( dst, GPS_update & 1);
                 break;
-    
+
             case MSP_WP: {
                 uint8_t wp_no = sbufReadU8(src);    // get the wp number
                 int32_t lat = 0, lon = 0;
@@ -812,7 +812,7 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
                 sbufWriteU8( dst, 0);                 // nav flag will come here
                 break;
             }
-    
+
             case MSP_GPSSVINFO:
                 sbufWriteU8(dst, GPS_numCh);
                 for (int i = 0; i < GPS_numCh; i++){
@@ -826,7 +826,7 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
 
         case MSP_DEBUG:
             // output some useful QA statistics
-            // debug[x] = ((hse_value / 1000000) * 1000) + (SystemCoreClock / 1000000);        
+            // debug[x] = ((hse_value / 1000000) * 1000) + (SystemCoreClock / 1000000);
             // XX0YY [crystal clock : core clock]
             for (int i = 0; i < DEBUG16_VALUE_COUNT; i++)
                 sbufWriteU16(dst, debug[i]);      // 4 variables are here for general monitoring purpose
@@ -926,7 +926,7 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
                     sbufWriteU8(dst, color->v);
                 }
                 break;
-    
+
             case MSP_LED_STRIP_CONFIG:
                 for (int i = 0; i < LED_MAX_STRIP_LENGTH; i++) {
                     ledConfig_t *ledConfig = ledConfigs(i);
@@ -937,7 +937,7 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
                     sbufWriteU8(dst, ledConfig->color);
                 }
                 break;
-    
+
             case MSP_LED_STRIP_MODECOLOR:
                 for (int i = 0; i < LED_MODE_COUNT; i++) {
                     for (int j = 0; j < LED_DIRECTION_COUNT; j++) {
@@ -961,7 +961,7 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
         #ifdef USE_FLASHFS
             case MSP_DATAFLASH_READ: {
                 uint32_t readAddress = sbufReadU32(src);
-    
+
                 serializeDataflashReadReply(reply, readAddress, 128);
                 break;
             }
@@ -1037,6 +1037,9 @@ static int processInCommand(mspPacket_t *cmd)
     sbuf_t * src = &cmd->buf;
     int len = sbufBytesRemaining(src);
 
+    uint8_t  i;
+    uint16_t midrc;
+
     switch (cmd->cmd) {
         case MSP_SELECT_SETTING:
             if (!ARMING_FLAG(ARMED)) {
@@ -1054,7 +1057,7 @@ static int processInCommand(mspPacket_t *cmd)
             uint16_t frame[MAX_SUPPORTED_RC_CHANNEL_COUNT];
             if (channelCount > MAX_SUPPORTED_RC_CHANNEL_COUNT)
                 return -1;
-            for (unsigned i = 0; i < channelCount; i++) 
+            for (unsigned i = 0; i < channelCount; i++)
                 frame[i] = sbufReadU16(src);
             rxMspFrameReceive(frame, channelCount);
             break;
@@ -1140,8 +1143,8 @@ static int processInCommand(mspPacket_t *cmd)
             currentControlRateProfile->rcYawExpo8 = sbufReadU8(src);
             break;
 
-        case MSP_SET_MISC: 
-            unsigned midrc = sbufReadU16(src);
+        case MSP_SET_MISC:
+            midrc = sbufReadU16(src);
             if (midrc > 1400 && midrc < 1600)
                 rxConfig()->midrc = midrc;
             motorAndServoConfig()->minthrottle  = sbufReadU16(src);
@@ -1176,10 +1179,10 @@ static int processInCommand(mspPacket_t *cmd)
             }
             break;
 
-        case MSP_SET_SERVO_CONFIGURATION: 
+        case MSP_SET_SERVO_CONFIGURATION:
             if (len != 1 + sizeof(servoParam_t))
                 return -1;
-            unsigned i = sbufReadU8(src);
+            i = sbufReadU8(src);
             if (i >= MAX_SUPPORTED_SERVOS)
                 return -1;
             servoConfVTOL[i].min                = sbufReadU16(src);
@@ -1192,8 +1195,8 @@ static int processInCommand(mspPacket_t *cmd)
             servoConfVTOL[i].reversedSources    = sbufReadU32(src);
             break;
 
-        case MSP_SET_SERVO_MIX_RULE: 
-            int i = sbufReadU8(src);
+        case MSP_SET_SERVO_MIX_RULE:
+            i = sbufReadU8(src);
             if (i >= MAX_SUPPORTED_SERVOS)
                 return -1;
             servoMixerVTOL[i].targetChannel = sbufReadU8(src);
@@ -1289,7 +1292,7 @@ static int processInCommand(mspPacket_t *cmd)
                 GPS_speed      = sbufReadU16(src);
                 GPS_update    |= 2;        // New data signalisation to GPS functions // FIXME Magic Numbers
                 break;
-    
+
             case MSP_SET_WP: {
                 uint8_t wp_no = sbufReadU8(src);             // get the wp number
                 int32_t lat   = sbufReadU32(src);
@@ -1418,7 +1421,7 @@ static int processInCommand(mspPacket_t *cmd)
                     color->v = v;
                 }
                 break;
-    
+
             case MSP_SET_LED_STRIP_CONFIG: {
                 int i = sbufReadU8(src);
                 if (len != (1 + 7) || i >= LED_MAX_STRIP_LENGTH)
@@ -1440,7 +1443,7 @@ static int processInCommand(mspPacket_t *cmd)
                 reevalulateLedConfig();
             }
             break;
-    
+
             case MSP_SET_LED_STRIP_MODECOLOR:
                 while (sbufBytesRemaining(src) >= 3) {
                     ledModeIndex_e modeIdx = sbufReadU8(src);
