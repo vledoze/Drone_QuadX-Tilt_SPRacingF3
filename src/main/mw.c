@@ -700,9 +700,9 @@ void taskMainPidLoop(void)
     filterServos();
     writeServos();
 
-    if (motorControlEnable) {
+    //if (motorControlEnable) {
         writeMotors();
-    }
+    //}
 
 #ifdef USE_SDCARD
         afatfs_poll();

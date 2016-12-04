@@ -156,7 +156,7 @@ void mixTable(void){
     /* Armed motors */
     else{
         // indicateur "failsafe"
-        bool    isFailsafeActive = failsafeIsActive();
+        bool isFailsafeActive = failsafeIsActive();
 
         if (phaseDeVol == VOL_QUAD){
             if( (mixerConfigVTOL.yaw_jump_prevention_limit < YAW_JUMP_PREVENTION_LIMIT_HIGH)) {
@@ -177,16 +177,16 @@ void mixTable(void){
 
             // Find roll/pitch/yaw desired output
             for (uint8_t i = 0; i < MAX_SUPPORTED_MOTORS; i++) {
-              rollPitchYawMix[i] =   (axisPID[FD_PITCH] * motorMixerVTOL[i].pitch)  //pitch contrbution
-                                   + (axisPID[FD_ROLL]  * motorMixerVTOL[i].roll)   //roll conribution
-                                   - (axisPID[FD_YAW]   * motorMixerVTOL[i].yaw)    //yaw contrbution
-                                      * mixerConfigVTOL.yaw_motor_direction ;       //yaw direction
-              // Valeur max commandee
-              if (rollPitchYawMix[i] > rollPitchYawMixMax)
-                rollPitchYawMixMax = rollPitchYawMix[i];
-              // Valeur min commandee
-              if (rollPitchYawMix[i] < rollPitchYawMixMin)
-                rollPitchYawMixMin = rollPitchYawMix[i];
+                rollPitchYawMix[i] =   (axisPID[FD_PITCH] * motorMixerVTOL[i].pitch)  //pitch contrbution
+                                     + (axisPID[FD_ROLL]  * motorMixerVTOL[i].roll)   //roll conribution
+                                     - (axisPID[FD_YAW]   * motorMixerVTOL[i].yaw)    //yaw contrbution
+                                        * mixerConfigVTOL.yaw_motor_direction ;       //yaw direction
+                // Valeur max commandee
+                if (rollPitchYawMix[i] > rollPitchYawMixMax)
+                  rollPitchYawMixMax = rollPitchYawMix[i];
+                // Valeur min commandee
+                if (rollPitchYawMix[i] < rollPitchYawMixMin)
+                  rollPitchYawMixMin = rollPitchYawMix[i];
             }
 
             // Scale roll/pitch/yaw uniformly to fit within throttle range

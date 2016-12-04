@@ -206,12 +206,9 @@ void writeServos(void){
     pwmWriteServo(4, servoCmd[SERVO_AUX1]);
 }
 
-
-
 bool isMixerUsingServos(void){
     return useServo;
 }
-
 
 int servoDirection(int servoIndex, int inputSource){
     // determine the direction (reversed or not) from the direction bitfield of the servo
