@@ -66,9 +66,9 @@
 #include "io/motor_and_servo.h"
 
 
-#ifndef DEFAULT_RX_FEATURE
+//#ifndef DEFAULT_RX_FEATURE
 #define DEFAULT_RX_FEATURE FEATURE_RX_PARALLEL_PWM
-#endif
+//#endif
 
 
 // Default settings
