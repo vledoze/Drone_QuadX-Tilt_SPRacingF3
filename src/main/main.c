@@ -588,7 +588,6 @@ void init(void)
     // 3eme Etape : OK initilisation Senseurs
     // -- "systemState" passe de 0000 0101 -> 0000 0111
     systemState |= SYSTEM_STATE_SENSORS_READY;
-    flashLedsAndBeep();
 
     //INITIALISATION COMMUNICATION =================================
     //Initialisation MSP
@@ -739,6 +738,7 @@ void init(void)
     // -- systemeState passe de 0000 1111 -> 1000 1111
     motorControlEnable = true;
     systemState |= SYSTEM_STATE_READY;
+    flashLedsAndBeep();
 }
 
 //Fonction    : processLoopback

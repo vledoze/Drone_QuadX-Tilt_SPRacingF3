@@ -51,7 +51,7 @@ typedef struct mixerConfig_s {
     float    servo_lowpass_freq;          // lowpass servo filter frequency selection; 1/1000ths of loop freq
 } mixerConfig_t;
 
-// Variables locales ---------------------------------------------------
+// Variables globales ---------------------------------------------------
 extern motorMixer_t  motorMixerVTOL[MAX_SUPPORTED_MOTORS];
 extern mixerConfig_t mixerConfigVTOL;
 

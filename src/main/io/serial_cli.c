@@ -104,18 +104,119 @@ uint8_t cliMode = 0;
 
 #ifdef USE_CLI
 
-extern uint16_t cycleTime; // FIXME dependency on mw.c
+//DEFINITIONS -----------------------------------------------------------------
+#ifndef SKIP_CLI_COMMAND_HELP
+  #define CLI_COMMAND_DEF(name, description, args, method) \
+  {                                                        \
+      name ,                                               \
+      description ,                                        \
+      args ,                                               \
+      method                                               \
+  }
+#else //SKIP_CLI_COMMAND_HELP
+  #define CLI_COMMAND_DEF(name, description, args, method) \
+  {                                                        \
+      name,                                                \
+      method                                               \
+  }
+#endif //!SKIP_CLI_COMMAND_HELP
 
+#define VALUE_TYPE_OFFSET    0
+#define VALUE_SECTION_OFFSET 4
+#define VALUE_MODE_OFFSET    6
+
+#define VALUE_TYPE_MASK (0x0F)
+#define VALUE_SECTION_MASK (0x30)
+#define VALUE_MODE_MASK (0xC0)
+
+// PROTOTYPAGES ----------------------------------------------------------
+typedef struct {
+    const char *name;
+    #ifndef SKIP_CLI_COMMAND_HELP
+      const char *description;
+      const char *args;
+    #endif //!SKIP_CLI_COMMAND_HELP
+    void (*func)(char *cmdline);
+} clicmd_t;
+
+typedef struct lookupTableEntry_s {
+    const char * const *values;
+    const uint8_t valueCount;
+} lookupTableEntry_t;
+
+typedef struct cliMinMaxConfig_s {
+    const int32_t min;
+    const int32_t max;
+} cliMinMaxConfig_t;
+
+typedef struct cliLookupTableConfig_s {
+    const lookupTableIndex_e tableIndex;
+} cliLookupTableConfig_t;
+
+typedef union {
+    cliLookupTableConfig_t lookup;
+    cliMinMaxConfig_t minmax;
+
+} cliValueConfig_t;
+
+typedef struct {
+    const char *name;
+    const uint8_t type; // see cliValueFlag_e
+    const cliValueConfig_t config;
+
+    pgn_t pgn;
+    uint16_t offset;
+} __attribute__((packed)) clivalue_t;
+
+typedef enum {
+    TABLE_OFF_ON = 0,
+    TABLE_UNIT,
+    TABLE_ALIGNMENT,
+    #ifdef GPS
+      TABLE_GPS_PROVIDER,
+      TABLE_GPS_SBAS_MODE,
+    #endif //GPS
+    #ifdef BLACKBOX
+      TABLE_BLACKBOX_DEVICE,
+    #endif //BLACKBOX
+    TABLE_CURRENT_SENSOR,
+    TABLE_GIMBAL_MODE,
+    TABLE_PID_CONTROLLER,
+    TABLE_SERIAL_RX,
+    TABLE_GYRO_FILTER,
+    TABLE_GYRO_LPF,
+} lookupTableIndex_e;
+
+typedef enum {
+    // value type
+    VAR_UINT8   = (0 << VALUE_TYPE_OFFSET),
+    VAR_INT8    = (1 << VALUE_TYPE_OFFSET),
+    VAR_UINT16  = (2 << VALUE_TYPE_OFFSET),
+    VAR_INT16   = (3 << VALUE_TYPE_OFFSET),
+    VAR_UINT32  = (4 << VALUE_TYPE_OFFSET),
+    VAR_FLOAT   = (5 << VALUE_TYPE_OFFSET),
+
+    // value section
+    MASTER_VALUE       = (0 << VALUE_SECTION_OFFSET),
+    PROFILE_VALUE      = (1 << VALUE_SECTION_OFFSET),
+    CONTROL_RATE_VALUE = (2 << VALUE_SECTION_OFFSET),
+
+    // value mode
+    MODE_DIRECT = (0 << VALUE_MODE_OFFSET),
+    MODE_LOOKUP = (1 << VALUE_MODE_OFFSET)
+} cliValueFlag_e;
+
+typedef union {
+    int32_t int_value;
+    float   float_value;
+} int_float_value_t;
+
+// PROTOTYPAGE FONCTIONS -----------------------------------------------
 void gpsEnablePassthrough(serialPort_t *gpsPassthroughPort);
-
-static serialPort_t *cliPort;
-static bufWriter_t *cliWriter;
-static uint8_t cliWriteBuffer[sizeof(*cliWriter) + 16];
 
 static void cliAux(char *cmdline);
 static void cliRxFail(char *cmdline);
 static void cliAdjustmentRange(char *cmdline);
-static void cliMotorMix(char *cmdline);
 static void cliDefaults(char *cmdline);
 static void cliDump(char *cmdLine);
 static void cliExit(char *cmdline);
@@ -127,8 +228,6 @@ static void cliRateProfile(char *cmdline);
 static void cliReboot(void);
 static void cliSave(char *cmdline);
 static void cliSerial(char *cmdline);
-static void cliServo(char *cmdline);
-static void cliServoMix(char *cmdline);
 
 static void cliSet(char *cmdline);
 static void cliGet(char *cmdline);
@@ -152,8 +251,6 @@ static void cliMap(char *cmdline);
   static void cliModeColor(char *cmdline);
 #endif //!LED_STRIP
 
-static void cliMixer(char *cmdline);
-
 #ifdef USE_FLASHFS
   static void cliFlashInfo(char *cmdline);
   static void cliFlashErase(char *cmdline);
@@ -167,39 +264,23 @@ static void cliMixer(char *cmdline);
   static void cliSdInfo(char *cmdline);
 #endif //USE_SDCARD
 
-// buffer
-static char cliBuffer[48];
-static uint32_t bufferIndex = 0;
+static void cliSetVar(const clivalue_t *var, const int_float_value_t value);
+static void cliPrintVar(const clivalue_t *var, uint32_t full);
+static void cliPrint(const char *str);
+static void cliPrintf(const char *fmt, ...);
+static void cliWrite(uint8_t ch);
 
-// this with mixerMode_e
-static const char * const mixerNames[] = {
-    "TRI", 
-    "QUADP", 
-    "QUADX", 
-    "BI",
-    "GIMBAL", 
-    "Y6", 
-    "HEX6",
-    "FLYING_WING", 
-    "Y4", 
-    "HEX6X", 
-    "OCTOX8", 
-    "OCTOFLATP", 
-    "OCTOFLATX",
-    "AIRPLANE", 
-    "HELI_120_CCPM", 
-    "HELI_90_DEG", 
-    "VTAIL4",
-    "HEX6H", 
-    "PPM_TO_SERVO", 
-    "DUALCOPTER", 
-    "SINGLECOPTER",
-    "ATAIL4", 
-    "CUSTOM", 
-    "CUSTOMAIRPLANE", 
-    "CUSTOMTRI", 
-    NULL
-};
+// VARIABLES GLOBALES -----------------------------------------------------
+extern uint16_t cycleTime; // FIXME dependency on mw.c
+
+// VARIABLES LOCALES ----------------------------------------------------
+static serialPort_t *cliPort;
+static bufWriter_t *cliWriter;
+static uint8_t cliWriteBuffer[sizeof(*cliWriter) + 16];
+
+// buffer
+static char     cliBuffer[48];
+static uint32_t bufferIndex = 0;
 
 // sync this with features_e
 static const char * const featureNames[] = {
@@ -259,31 +340,6 @@ static const rxFailsafeChannelMode_e rxFailsafeModesTable[RX_FAILSAFE_TYPE_COUNT
   };
 #endif //!CJMCU
 
-typedef struct {
-    const char *name;
-    #ifndef SKIP_CLI_COMMAND_HELP
-      const char *description;
-      const char *args;
-    #endif //!SKIP_CLI_COMMAND_HELP
-    void (*func)(char *cmdline);
-} clicmd_t;
-
-#ifndef SKIP_CLI_COMMAND_HELP
-  #define CLI_COMMAND_DEF(name, description, args, method) \
-  {                                                        \
-      name ,                                               \
-      description ,                                        \
-      args ,                                               \
-      method                                               \
-  }
-#else //SKIP_CLI_COMMAND_HELP
-  #define CLI_COMMAND_DEF(name, description, args, method) \
-  {                                                        \
-      name,                                                \
-      method                                               \
-  }
-#endif //!SKIP_CLI_COMMAND_HELP
-
 // should be sorted a..z for bsearch()
 const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("adjrange", "configure adjustment ranges", NULL, cliAdjustmentRange),
@@ -313,8 +369,6 @@ const clicmd_t cmdTable[] = {
       CLI_COMMAND_DEF("led", "configure leds", NULL, cliLed),
     #endif //LED_STRIP
     CLI_COMMAND_DEF("map", "configure rc channel order", "[<map>]", cliMap),
-    CLI_COMMAND_DEF("mixer", "configure mixer", "list\r\n" "\t<name>", cliMixer),
-    CLI_COMMAND_DEF("mmix", "custom motor mixer", NULL, cliMotorMix),
     CLI_COMMAND_DEF("motor",  "get/set motor", "<index> [<value>]", cliMotor),
     CLI_COMMAND_DEF("play_sound", NULL, "[<index>]\r\n", cliPlaySound),
     CLI_COMMAND_DEF("profile", "change profile", "[<index>]", cliProfile),
@@ -323,13 +377,7 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("rxfail", "show/set rx failsafe settings", NULL, cliRxFail),
     CLI_COMMAND_DEF("save", "save and reboot", NULL, cliSave),
     CLI_COMMAND_DEF("serial", "configure serial ports", NULL, cliSerial),
-    CLI_COMMAND_DEF("servo", "configure servos", NULL, cliServo),
     CLI_COMMAND_DEF("set", "change setting", "[<name>=<value>]", cliSet),
-    CLI_COMMAND_DEF("smix", "servo mixer",
-        "<rule> <servo> <source> <rate> <speed> <min> <max> <box>\r\n"
-        "\treset\r\n"
-        "\tload <mixer>\r\n"
-        "\treverse <servo> <source> r|n", cliServoMix),
     #ifdef USE_SDCARD
       CLI_COMMAND_DEF("sd_info", "sdcard info", NULL, cliSdInfo),
     #endif //USE_SDCARD
@@ -428,30 +476,6 @@ static const char * const lookupTableGyroLpf[] = {
     "10HZ"
 };
 
-typedef struct lookupTableEntry_s {
-    const char * const *values;
-    const uint8_t valueCount;
-} lookupTableEntry_t;
-
-typedef enum {
-    TABLE_OFF_ON = 0,
-    TABLE_UNIT,
-    TABLE_ALIGNMENT,
-    #ifdef GPS
-      TABLE_GPS_PROVIDER,
-      TABLE_GPS_SBAS_MODE,
-    #endif //GPS
-    #ifdef BLACKBOX
-      TABLE_BLACKBOX_DEVICE,
-    #endif //BLACKBOX
-    TABLE_CURRENT_SENSOR,
-    TABLE_GIMBAL_MODE,
-    TABLE_PID_CONTROLLER,
-    TABLE_SERIAL_RX,
-    TABLE_GYRO_FILTER,
-    TABLE_GYRO_LPF,
-} lookupTableIndex_e;
-
 static const lookupTableEntry_t lookupTables[] = {
     { lookupTableOffOn,     sizeof(lookupTableOffOn) / sizeof(char *) },
     { lookupTableUnit,      sizeof(lookupTableUnit) / sizeof(char *) },
@@ -470,57 +494,6 @@ static const lookupTableEntry_t lookupTables[] = {
     { lookupTableGyroFilter,    sizeof(lookupTableGyroFilter) / sizeof(char *) },
     { lookupTableGyroLpf,       sizeof(lookupTableGyroLpf) / sizeof(char *) },
 };
-
-#define VALUE_TYPE_OFFSET    0
-#define VALUE_SECTION_OFFSET 4
-#define VALUE_MODE_OFFSET    6
-
-typedef enum {
-    // value type
-    VAR_UINT8   = (0 << VALUE_TYPE_OFFSET),
-    VAR_INT8    = (1 << VALUE_TYPE_OFFSET),
-    VAR_UINT16  = (2 << VALUE_TYPE_OFFSET),
-    VAR_INT16   = (3 << VALUE_TYPE_OFFSET),
-    VAR_UINT32  = (4 << VALUE_TYPE_OFFSET),
-    VAR_FLOAT   = (5 << VALUE_TYPE_OFFSET),
-
-    // value section
-    MASTER_VALUE       = (0 << VALUE_SECTION_OFFSET),
-    PROFILE_VALUE      = (1 << VALUE_SECTION_OFFSET),
-    CONTROL_RATE_VALUE = (2 << VALUE_SECTION_OFFSET),
-
-    // value mode
-    MODE_DIRECT = (0 << VALUE_MODE_OFFSET),
-    MODE_LOOKUP = (1 << VALUE_MODE_OFFSET)
-} cliValueFlag_e;
-
-#define VALUE_TYPE_MASK (0x0F)
-#define VALUE_SECTION_MASK (0x30)
-#define VALUE_MODE_MASK (0xC0)
-
-typedef struct cliMinMaxConfig_s {
-    const int32_t min;
-    const int32_t max;
-} cliMinMaxConfig_t;
-
-typedef struct cliLookupTableConfig_s {
-    const lookupTableIndex_e tableIndex;
-} cliLookupTableConfig_t;
-
-typedef union {
-    cliLookupTableConfig_t lookup;
-    cliMinMaxConfig_t minmax;
-
-} cliValueConfig_t;
-
-typedef struct {
-    const char *name;
-    const uint8_t type; // see cliValueFlag_e
-    const cliValueConfig_t config;
-
-    pgn_t pgn;
-    uint16_t offset;
-} __attribute__((packed)) clivalue_t;
 
 const clivalue_t valueTable[] = {
     { "looptime",                   VAR_UINT16 | MASTER_VALUE, .config.minmax = {0, 9000} , PG_IMU_CONFIG, offsetof(imuConfig_t, looptime)},
@@ -637,15 +610,6 @@ const clivalue_t valueTable[] = {
     { "throttle_correction_value",  VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 0,  150 } , PG_THROTTLE_CORRECTION_CONFIG, offsetof(throttleCorrectionConfig_t, throttle_correction_value)},
     { "throttle_correction_angle",  VAR_UINT16 | PROFILE_VALUE, .config.minmax = { 1,  900 } , PG_THROTTLE_CORRECTION_CONFIG, offsetof(throttleCorrectionConfig_t, throttle_correction_angle)},
 
-
-    { "pid_at_min_throttle",        VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON } , PG_MIXER_CONFIG, offsetof(mixerConfig_t, pid_at_min_throttle)},
-    { "yaw_motor_direction",        VAR_INT8   | MASTER_VALUE, .config.minmax = { -1,  1 } , PG_MIXER_CONFIG, offsetof(mixerConfig_t, yaw_motor_direction)},
-    { "yaw_jump_prevention_limit",  VAR_UINT16 | MASTER_VALUE, .config.minmax = { YAW_JUMP_PREVENTION_LIMIT_LOW,  YAW_JUMP_PREVENTION_LIMIT_HIGH } , PG_MIXER_CONFIG, offsetof(mixerConfig_t, yaw_jump_prevention_limit)},
-
-    { "tri_unarmed_servo",          VAR_INT8   | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON } , PG_MIXER_CONFIG, offsetof(mixerConfig_t, tri_unarmed_servo)},
-    { "servo_lowpass_freq",         VAR_FLOAT  | MASTER_VALUE, .config.minmax = { 10,  400} , PG_MIXER_CONFIG, offsetof(mixerConfig_t, servo_lowpass_freq)},
-    { "servo_lowpass_enable",       VAR_INT8   | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON } , PG_MIXER_CONFIG, offsetof(mixerConfig_t, servo_lowpass_enable)},
-
     { "default_rate_profile",       VAR_UINT8  | PROFILE_VALUE , .config.minmax = { 0,  MAX_CONTROL_RATE_PROFILE_COUNT - 1 } , PG_RATE_PROFILE_SELECTION, offsetof(rateProfileSelection_t, defaultRateProfileIndex)},
 
     { "rc_rate",                    VAR_UINT8  | CONTROL_RATE_VALUE, .config.minmax = { 0,  250 } , PG_CONTROL_RATE_PROFILES, offsetof(controlRateConfig_t, rcRate8)},
@@ -742,16 +706,7 @@ const clivalue_t valueTable[] = {
     { "magzero_z",                  VAR_INT16  | MASTER_VALUE, .config.minmax = { -32768,  32767 } , PG_SENSOR_TRIMS, offsetof(sensorTrims_t, magZero.raw[Z])},
 };
 
-typedef union {
-    int32_t int_value;
-    float   float_value;
-} int_float_value_t;
-
-static void cliSetVar(const clivalue_t *var, const int_float_value_t value);
-static void cliPrintVar(const clivalue_t *var, uint32_t full);
-static void cliPrint(const char *str);
-static void cliPrintf(const char *fmt, ...);
-static void cliWrite(uint8_t ch);
+// IMPLEMENTATION ---------------------------------------------------------------------
 
 static void cliPrompt(void)
 {
@@ -1102,11 +1057,6 @@ static void cliAdjustmentRange(char *cmdline)
     }
 }
 
-static void cliMotorMix(char *cmdline)
-{
-    UNUSED(cmdline);
-}
-
 static void cliRxRange(char *cmdline)
 {
     int i, validArgumentCount = 0;
@@ -1245,16 +1195,6 @@ static void cliRxRange(char *cmdline)
       }
   }
 #endif //LED_STRIP
-
-static void cliServo(char *cmdline)
-{
-    UNUSED(cmdline);
-}
-
-static void cliServoMix(char *cmdline)
-{
-    UNUSED(cmdline);
-}
 
 #ifdef USE_SDCARD
   static void cliWriteBytes(const uint8_t *buffer, int count)
@@ -1692,11 +1632,6 @@ static void cliMap(char *cmdline)
         out[rxConfig()->rcmap[i]] = rcChannelLetters[i];
     out[i] = '\0';
     cliPrintf("%s\r\n", out);
-}
-
-static void cliMixer(char *cmdline)
-{
-    UNUSED(cmdline);
 }
 
 static void cliMotor(char *cmdline)
