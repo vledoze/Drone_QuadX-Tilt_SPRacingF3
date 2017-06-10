@@ -55,12 +55,12 @@ SYS_SRC = $(notdir $(wildcard $(SYS_DIR)/*.c))
 # Search Path for Sources files
 SRC_DIR = $(ROOT)/src/main
 VPATH := \
-$(STDPERIPH_DIR)/src:\
+$(SRC_DIR):\
+$(SRC_DIR)/startup:\
 $(CMSIS_DIR)/CM1/CoreSupport:\
 $(CMSIS_DIR)/CM1/DeviceSupport/ST/STM32F30x:\
 $(SYS_DIR):\
-$(SRC_DIR):\
-$(SRC_DIR)/startup
+$(STDPERIPH_DIR)/src
 
 #Sources files
 STARTUP_STM32F30x_SRC = \
@@ -237,17 +237,17 @@ SIZE = arm-none-eabi-size
 
 # Tool options.
 ifeq ($(DEBUG),GDB)
-OPTIMIZE = -O0
-LTO_FLAGS = $(OPTIMIZE)
+	OPTIMIZE = -O0
+	LTO_FLAGS = $(OPTIMIZE)
 else
-OPTIMIZE = -Os
-LTO_FLAGS = -flto -fuse-linker-plugin $(OPTIMIZE)
+	OPTIMIZE = -Os
+	LTO_FLAGS = -flto -fuse-linker-plugin $(OPTIMIZE)
 endif
 
 # Flags
 ARCH_FLAGS = -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -fsingle-precision-constant -Wdouble-promotion
 ifneq ($(filter $(OPTIONS),FAIL_ON_WARNINGS),)
-WARN_FLAGS += -Werror
+	WARN_FLAGS += -Werror
 endif
 DEBUG_FLAGS = -ggdb3 -DDEBUG
 DEVICE_FLAGS = -DSTM32F303xC -DSTM32F303 -DFLASH_SIZE=$(FLASH_SIZE) -DSPRACINGF3
@@ -261,7 +261,11 @@ $(addprefix -D,$(OPTIONS)) \
 $(addprefix -I,$(INCLUDE_DIRS)) \
 $(DEBUG_FLAGS) \
 -std=gnu99 \
--Wall -Wextra -Wunsafe-loop-optimizations -Wdouble-promotion -Wundef \
+-Wall \
+-Wextra \
+-Wunsafe-loop-optimizations \
+-Wdouble-promotion \
+-Wundef \
 -ffunction-sections \
 -fdata-sections \
 $(DEVICE_FLAGS) \
@@ -269,9 +273,11 @@ $(DEVICE_FLAGS) \
 -D'__FORKNAME__="$(FORKNAME)"' \
 -D'__TARGET__="SPRACINGF3"' \
 -D'__REVISION__="$(REVISION)"' \
--fverbose-asm -ffat-lto-objects \
+-fverbose-asm \
+-ffat-lto-objects \
 -save-temps=obj \
--MMD -MP
+-MMD \
+-MP
 
 # Assembly flags
 ASFLAGS = \
