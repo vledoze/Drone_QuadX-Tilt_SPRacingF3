@@ -633,7 +633,7 @@ _TIM_IRQ_HANDLER(TIM8_UP_IRQHandler, 8);
 #if USED_TIMERS & TIM_N(15)
 _TIM_IRQ_HANDLER(TIM1_BRK_TIM15_IRQHandler, 15);
 #endif
-#if defined(STM32F303xC) && ((USED_TIMERS & (TIM_N(1)|TIM_N(16))) == (TIM_N(16)))
+#if ((USED_TIMERS & (TIM_N(1)|TIM_N(16))) == (TIM_N(16)))
 _TIM_IRQ_HANDLER(TIM1_UP_TIM16_IRQHandler, 16);    // only timer16 is used, not timer1
 #endif
 #if USED_TIMERS & TIM_N(17)

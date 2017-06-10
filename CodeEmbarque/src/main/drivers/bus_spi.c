@@ -252,7 +252,7 @@ void initSpi2(void)
 }
 #endif
 
-#if defined(USE_SPI_DEVICE_3) && defined(STM32F303xC)
+#if defined(USE_SPI_DEVICE_3)
 
 #ifndef SPI3_GPIO
 #define SPI3_GPIO               GPIOB

@@ -49,11 +49,6 @@ void usartInitAllIOSignals(void)
     gpioInit(UART1_GPIO, &gpio);
 #endif
 
-//#ifdef USE_UART2
-//    gpio.pin = UART2_TX_PIN;
-//    gpioInit(UART2_GPIO, &gpio);
-//#endif
-
 #ifdef USE_UART3
     gpio.pin = UART3_TX_PIN;
     gpioInit(UART3_GPIO, &gpio);
@@ -62,9 +57,6 @@ void usartInitAllIOSignals(void)
 
 static void usartConfigurePinInversion(uartPort_t *uartPort)
 {
-#if !defined(INVERTER) && !defined(STM32F303xC)
-    UNUSED(uartPort);
-#else
     bool inverted = uartPort->port.options & SERIAL_INVERTED;
 
 #ifdef INVERTER
@@ -84,7 +76,6 @@ static void usartConfigurePinInversion(uartPort_t *uartPort)
     }
 
     USART_InvPinCmd(uartPort->USARTx, inversionPins, inverted ? ENABLE : DISABLE);
-#endif
 }
 
 static void uartReconfigure(uartPort_t *uartPort)
