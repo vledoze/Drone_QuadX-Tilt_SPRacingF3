@@ -199,15 +199,15 @@ blackbox/blackbox.c \
 blackbox/blackbox_io.c
 
 SPRACINGF3_SRC = \
-$(SYS_SRC) \
-$(CMSIS_SRC) \
 $(STDPERIPH_SRC) \
+$(CMSIS_SRC) \
+$(SYS_SRC) \
 $(STARTUP_STM32F30x_SRC) \
 $(DRIVERS_SRC) \
 $(CONFIG_SRC) \
 $(COMMON_SRC) \
 $(MAIN_SRC) \
-$(MAIN_SRC) \
+$(FLIGHT_SRC) \
 $(IO_SRC) \
 $(RX_SRC) \
 $(SENSORS_SRC) \
@@ -337,38 +337,38 @@ hex:    $(HEX)
 
 ## clean       : clean up all temporary / machine-generated files
 clean:
-    rm -f $(BIN) $(HEX) $(ELF) $(OBJS) $(MAP)
-    rm -rf $(OBJ_DIR)/SPRACINGF3
-    cd src/test && $(MAKE) clean || true
+	rm -f $(BIN) $(HEX) $(ELF) $(OBJS) $(MAP)
+	rm -rf $(OBJ_DIR)/SPRACINGF3
+	cd src/test && $(MAKE) clean || true
 
 ## flash       : flash firmware (.hex) onto flight controller
 flash: $(HEX)
-    stty -F $(SERIAL_DEVICE) raw speed 115200 -crtscts cs8 -parenb -cstopb -ixon
-    echo -n 'R' >$(SERIAL_DEVICE)
-    stm32flash -w $(HEX) -v -g 0x0 -b 115200 $(SERIAL_DEVICE)
+	stty -F $(SERIAL_DEVICE) raw speed 115200 -crtscts cs8 -parenb -cstopb -ixon
+	echo -n 'R' >$(SERIAL_DEVICE)
+	stm32flash -w $(HEX) -v -g 0x0 -b 115200 $(SERIAL_DEVICE)
 
 ## st-flash    : flash firmware (.bin) onto flight controller
 st-flash: $(BIN)
-    st-flash --reset write $< 0x08000000
+	st-flash --reset write $< 0x08000000
 
 ## unbrick     : unbrick flight controller
 unbrick: $(HEX)
-    stty -F $(SERIAL_DEVICE) raw speed 115200 -crtscts cs8 -parenb -cstopb -ixon
-    stm32flash -w $(HEX) -v -g 0x0 -b 115200 $(SERIAL_DEVICE)
+	stty -F $(SERIAL_DEVICE) raw speed 115200 -crtscts cs8 -parenb -cstopb -ixon
+	stm32flash -w $(HEX) -v -g 0x0 -b 115200 $(SERIAL_DEVICE)
 
 ## cppcheck    : run static analysis on C source code
 cppcheck: $(CSOURCES)
-    $(CPPCHECK)
+	$(CPPCHECK)
 
 cppcheck-result.xml: $(CSOURCES)
-    $(CPPCHECK) --xml-version=2 2> cppcheck-result.xml
+	$(CPPCHECK) --xml-version=2 2> cppcheck-result.xml
 
 ## help        : print this help message and exit
 help: Makefile
-    @echo ""
-    @echo "Makefile for the $(FORKNAME)_$(SPRACINGF3) firmware"
-    @echo ""
-    @sed -n 's/^## //p' $<
+	@echo ""
+	@echo "Makefile for the $(FORKNAME)_$(SPRACINGF3) firmware"
+	@echo ""
+	@sed -n 's/^## //p' $<
 
 ## test        : run the cleanflight test suite (not implemented yet)
 ## junittest   : run the cleanflight test suite, producing Junit XML result files. (not implemented yet)
@@ -381,31 +381,31 @@ $(OBJS) : Makefile
 # List of buildable ELF files and their object dependencies.
 # It would be nice to compute these lists, but that seems to be just beyond make.
 $(HEX): $(ELF)
-    $(OBJCOPY) -O ihex --set-start 0x8000000 $< $@
+	$(OBJCOPY) -O ihex --set-start 0x8000000 $< $@
 
 $(BIN): $(ELF)
-    $(OBJCOPY) -O binary $< $@
+	$(OBJCOPY) -O binary $< $@
 
 $(ELF):  $(OBJS)
-    $(CC) -o $@ $^ $(LDFLAGS)
-    $(SIZE) $(ELF)
+	$(CC) -o $@ $^ $(LDFLAGS)
+	$(SIZE) $(ELF)
 
 # Compile
 $(OBJ_DIR)/SPRACINGF3/%.o: %.c
-    @mkdir -p $(dir $@)
-    @echo %% $(notdir $<)
-    @$(CC) -c -o $@ $(CFLAGS) $<
+	@mkdir -p $(dir $@)
+	@echo %% $(notdir $<)
+	@$(CC) -c -o $@ $(CFLAGS) $<
 
 # Assemble
 $(OBJ_DIR)/SPRACINGF3/%.o: %.s
-    @mkdir -p $(dir $@)
-    @echo %% $(notdir $<)
-    @$(CC) -c -o $@ $(ASFLAGS) $<
+	@mkdir -p $(dir $@)
+	@echo %% $(notdir $<)
+	@$(CC) -c -o $@ $(ASFLAGS) $<
 
 $(OBJ_DIR)/SPRACINGF3/%.o: %.S
-    @mkdir -p $(dir $@)
-    @echo %% $(notdir $<)
-    @$(CC) -c -o $@ $(ASFLAGS) $<
+	@mkdir -p $(dir $@)
+	@echo %% $(notdir $<)
+	@$(CC) -c -o $@ $(ASFLAGS) $<
 
 # include auto-generated dependencies
 -include $(DEPS)
