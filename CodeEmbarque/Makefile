@@ -83,13 +83,6 @@ drivers/sound_beeper_stm32f30x.c \
 drivers/system_stm32f30x.c \
 drivers/timer.c \
 drivers/timer_stm32f30x.c \
-drivers/bus_i2c_soft.c \
-drivers/serial.c \
-drivers/sound_beeper.c \
-drivers/system.c \
-drivers/dma.c \
-drivers/buf_writer.c \
-drivers/gyro_sync.c \
 drivers/accgyro_mpu.c \
 drivers/accgyro_mpu6050.c \
 drivers/barometer_ms5611.c \
@@ -100,7 +93,38 @@ drivers/flash_m25p16.c \
 drivers/light_ws2811strip.c \
 drivers/light_ws2811strip_stm32f30x.c \
 drivers/serial_softserial.c \
-drivers/sonar_hcsr04.c
+drivers/sonar_hcsr04.c 
+
+FLASH_SRC = \
+io/flashfs.c  
+
+INIT_SRC = \
+flight/gtune.c \
+flight/navigation.c \
+flight/gps_conversion.c \
+common/colorconversion.c \
+io/gps.c \
+io/ledstrip.c \
+io/display.c 
+
+TELEMETRY_SRC = \
+telemetry/telemetry.c \
+telemetry/frsky.c \
+telemetry/hott.c \
+telemetry/smartport.c \
+telemetry/ltm.c \
+telemetry/mavlink.c \
+sensors/sonar.c \
+sensors/barometer.c
+
+BLACKBOX_SRC = \
+blackbox/blackbox.c \
+blackbox/blackbox_io.c
+
+BUILD_SRC = \
+build_config.c \
+debug.c \
+version.c 
 
 CONFIG_SRC = \
 config/config.c \
@@ -117,17 +141,13 @@ common/printf.c \
 common/typeconversion.c \
 common/encoding.c \
 common/filter.c \
-common/streambuf.c \
-common/colorconversion.c
+common/streambuf.c 
 
 MAIN_SRC = \
-build_config.c \
-debug.c \
-main.c \
-mw.c \
 scheduler.c \
 scheduler_tasks.c \
-version.c
+main.c \
+mw.c 
 
 FLIGHT_SRC = \
 flight/altitudehold.c \
@@ -139,9 +159,13 @@ flight/pid_mw23.c \
 flight/imu.c \
 flight/mixer.c \
 flight/servos.c \
-flight/gtune.c \
-flight/navigation.c \
-flight/gps_conversion.c
+drivers/bus_i2c_soft.c \
+drivers/serial.c \
+drivers/sound_beeper.c \
+drivers/system.c \
+drivers/dma.c \
+drivers/buf_writer.c \
+drivers/gyro_sync.c 
 
 IO_SRC = \
 io/beeper.c \
@@ -159,10 +183,6 @@ io/serial_cli.c \
 io/serial_msp.c \
 io/statusindicator.c \
 io/msp.c \
-io/gps.c \
-io/ledstrip.c \
-io/display.c \
-io/flashfs.c
 
 RX_SRC = \
 rx/rx.c \
@@ -182,28 +202,17 @@ sensors/battery.c \
 sensors/boardalignment.c \
 sensors/compass.c \
 sensors/gyro.c \
-sensors/initialisation.c \
-sensors/sonar.c \
-sensors/barometer.c
-
-TELEMETRY_SRC = \
-telemetry/telemetry.c \
-telemetry/frsky.c \
-telemetry/hott.c \
-telemetry/smartport.c \
-telemetry/ltm.c \
-telemetry/mavlink.c
-
-BLACKBOX_SRC = \
-blackbox/blackbox.c \
-blackbox/blackbox_io.c
+sensors/initialisation.c 
 
 SPRACINGF3_SRC = \
-$(STDPERIPH_SRC) \
-$(CMSIS_SRC) \
-$(SYS_SRC) \
 $(STARTUP_STM32F30x_SRC) \
 $(DRIVERS_SRC) \
+$(FLASH_SRC) \
+$(INIT_SRC) \
+$(TELEMETRY_SRC) \
+$(BLACKBOX_SRC) \
+$(BUILD_SRC) \
+$(SYS_SRC) \
 $(CONFIG_SRC) \
 $(COMMON_SRC) \
 $(MAIN_SRC) \
@@ -211,8 +220,8 @@ $(FLIGHT_SRC) \
 $(IO_SRC) \
 $(RX_SRC) \
 $(SENSORS_SRC) \
-$(TELEMETRY_SRC) \
-$(BLACKBOX_SRC)
+$(CMSIS_SRC) \
+$(STDPERIPH_SRC) 
 
 # Includes directories
 INCLUDE_DIRS := \
