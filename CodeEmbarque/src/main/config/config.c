@@ -96,46 +96,6 @@ STATIC_UNIT_TESTED void resetConf(void)
     featureSet(FEATURE_VBAT);
 #endif
 
-#if defined(COLIBRI_RACE)
-    // alternative defaults settings for COLIBRI RACE targets
-    imuConfig()->looptime = 1000;
-#endif
-
-    // alternative defaults settings for ALIENFLIGHTF1 and ALIENFLIGHTF3 targets
-#ifdef ALIENFLIGHT
-#ifdef ALIENFLIGHTF3
-    serialConfig()->portConfigs[2].functionMask = FUNCTION_RX_SERIAL;
-    batteryConfig()->vbatscale = 20;
-    sensorSelectionConfig()->mag_hardware = MAG_NONE;            // disabled by default
-# else
-    serialConfig()->portConfigs[1].functionMask = FUNCTION_RX_SERIAL;
-# endif
-    rxConfig()->serialrx_provider = SERIALRX_SPEKTRUM2048;
-    rxConfig()->spektrum_sat_bind = 5;
-    motorAndServoConfig()->minthrottle = 1000;
-    motorAndServoConfig()->maxthrottle = 2000;
-    motorAndServoConfig()->motor_pwm_rate = 32000;
-    imuConfig()->looptime = 2000;
-    pidProfile()->pidController = PID_CONTROLLER_LUX_FLOAT;
-    failsafeConfig()->failsafe_delay = 2;
-    failsafeConfig()->failsafe_off_delay = 0;
-    mixerConfig()->yaw_jump_prevention_limit = YAW_JUMP_PREVENTION_LIMIT_HIGH;
-    currentControlRateProfile->rcRate8 = 100;
-    currentControlRateProfile->rates[PITCH] = 20;
-    currentControlRateProfile->rates[ROLL] = 20;
-    currentControlRateProfile->rates[YAW] = 20;
-    parseRcChannels("TAER1234", rxConfig());
-
-    *customMotorMixer(0) = (motorMixer_t){ 1.0f, -0.414178f,  1.0f, -1.0f };    // REAR_R
-    *customMotorMixer(1) = (motorMixer_t){ 1.0f, -0.414178f, -1.0f,  1.0f };    // FRONT_R
-    *customMotorMixer(2) = (motorMixer_t){ 1.0f,  0.414178f,  1.0f,  1.0f };    // REAR_L
-    *customMotorMixer(3) = (motorMixer_t){ 1.0f,  0.414178f, -1.0f, -1.0f };    // FRONT_L
-    *customMotorMixer(4) = (motorMixer_t){ 1.0f, -1.0f, -0.414178f, -1.0f };    // MIDFRONT_R
-    *customMotorMixer(5) = (motorMixer_t){ 1.0f,  1.0f, -0.414178f,  1.0f };    // MIDFRONT_L
-    *customMotorMixer(6) = (motorMixer_t){ 1.0f, -1.0f,  0.414178f,  1.0f };    // MIDREAR_R
-    *customMotorMixer(7) = (motorMixer_t){ 1.0f,  1.0f,  0.414178f, -1.0f };    // MIDREAR_L
-#endif
-
     // copy first profile into remaining profile
     PG_FOREACH_PROFILE(reg) {
         for (int i = 1; i < MAX_PROFILE_COUNT; i++) {
@@ -210,15 +170,6 @@ static void validateAndFixConfig(void)
     if (armingConfig()->retarded_arm && mixerConfigVTOL.pid_at_min_throttle) {
         mixerConfigVTOL.pid_at_min_throttle = 0;
     }
-
-
-#ifdef STM32F10X
-    // avoid overloading the CPU on F1 targets when using gyro sync and GPS.
-    if (imuConfig()->gyroSync && imuConfig()->gyroSyncDenominator < 2 && featureConfigured(FEATURE_GPS)) {
-        imuConfig()->gyroSyncDenominator = 2;
-    }
-#endif
-
 
 #if defined(LED_STRIP)
 #if (defined(USE_SOFTSERIAL1) || defined(USE_SOFTSERIAL2))

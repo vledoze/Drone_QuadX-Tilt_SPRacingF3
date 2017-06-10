@@ -56,7 +56,6 @@ void initSpi1(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI1, ENABLE);
     RCC_APB2PeriphResetCmd(RCC_APB2Periph_SPI1, ENABLE);
 
-#ifdef STM32F303xC
     GPIO_InitTypeDef GPIO_InitStructure;
 
     RCC_AHBPeriphClockCmd(SPI1_GPIO_PERIPHERAL, ENABLE);
@@ -107,29 +106,6 @@ void initSpi1(void)
 
     GPIO_Init(SPI1_GPIO, &GPIO_InitStructure);
 #endif
-#endif
-
-#ifdef STM32F10X
-    gpio_config_t gpio;
-
-    // MOSI + SCK as output
-    gpio.mode = Mode_AF_PP;
-    gpio.pin = SPI1_MOSI_PIN | SPI1_SCK_PIN;
-    gpio.speed = Speed_50MHz;
-    gpioInit(SPI1_GPIO, &gpio);
-
-    // MISO as input
-    gpio.pin = SPI1_MISO_PIN;
-    gpio.mode = Mode_IN_FLOATING;
-    gpioInit(SPI1_GPIO, &gpio);
-
-#ifdef SPI1_NSS_PIN
-    // NSS as gpio slave select
-    gpio.pin = SPI1_NSS_PIN;
-    gpio.mode = Mode_Out_PP;
-    gpioInit(SPI1_GPIO, &gpio);
-#endif
-#endif
 
     // Init SPI1 hardware
     SPI_I2S_DeInit(SPI1);
@@ -150,10 +126,8 @@ void initSpi1(void)
     spi.SPI_CPHA = SPI_CPHA_2Edge;
 #endif
 
-#ifdef STM32F303xC
     // Configure for 8-bit reads.
     SPI_RxFIFOThresholdConfig(SPI1, SPI_RxFIFOThreshold_QF);
-#endif
 
     SPI_Init(SPI1, &spi);
     SPI_Cmd(SPI1, ENABLE);
@@ -195,7 +169,6 @@ void initSpi2(void)
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2, ENABLE);
     RCC_APB1PeriphResetCmd(RCC_APB1Periph_SPI2, ENABLE);
 
-#ifdef STM32F303xC
     GPIO_InitTypeDef GPIO_InitStructure;
 
     RCC_AHBPeriphClockCmd(SPI2_GPIO_PERIPHERAL, ENABLE);
@@ -246,29 +219,6 @@ void initSpi2(void)
 
     GPIO_Init(SPI2_GPIO, &GPIO_InitStructure);
 #endif
-#endif
-
-#ifdef STM32F10X
-    gpio_config_t gpio;
-
-    // MOSI + SCK as output
-    gpio.mode = Mode_AF_PP;
-    gpio.pin = SPI2_SCK_PIN | SPI2_MOSI_PIN;
-    gpio.speed = Speed_50MHz;
-    gpioInit(SPI2_GPIO, &gpio);
-
-    // MISO as input
-    gpio.pin = SPI2_MISO_PIN;
-    gpio.mode = Mode_IN_FLOATING;
-    gpioInit(SPI2_GPIO, &gpio);
-
-#ifdef SPI2_NSS_PIN
-    // NSS as gpio slave select
-    gpio.pin = SPI2_NSS_PIN;
-    gpio.mode = Mode_Out_PP;
-    gpioInit(SPI2_GPIO, &gpio);
-#endif
-#endif
 
     // Init SPI2 hardware
     SPI_I2S_DeInit(SPI2);
@@ -289,10 +239,8 @@ void initSpi2(void)
     spi.SPI_CPHA = SPI_CPHA_2Edge;
 #endif
 
-#ifdef STM32F303xC
     // Configure for 8-bit reads.
     SPI_RxFIFOThresholdConfig(SPI2, SPI_RxFIFOThreshold_QF);
-#endif
 
     SPI_Init(SPI2, &spi);
     SPI_Cmd(SPI2, ENABLE);
@@ -438,7 +386,7 @@ bool spiInit(SPI_TypeDef *instance)
         return true;
     }
 #endif
-#if defined(USE_SPI_DEVICE_3) && defined(STM32F303xC)
+#if defined(USE_SPI_DEVICE_3)
     if (instance == SPI3) {
         initSpi3();
         return true;
@@ -456,24 +404,15 @@ uint8_t spiTransferByte(SPI_TypeDef *instance, uint8_t data)
             break;
     }
 
-#ifdef STM32F303xC
     SPI_SendData8(instance, data);
-#endif
-#ifdef STM32F10X
-    SPI_I2S_SendData(instance, data);
-#endif
+    
     spiTimeout = 1000;
     while (SPI_I2S_GetFlagStatus(instance, SPI_I2S_FLAG_RXNE) == RESET){
         if ((spiTimeout--) == 0)
             break;
     }
 
-#ifdef STM32F303xC
     return ((uint8_t)SPI_ReceiveData8(instance));
-#endif
-#ifdef STM32F10X
-    return ((uint8_t)SPI_I2S_ReceiveData(instance));
-#endif
 }
 
 /**
@@ -481,13 +420,7 @@ uint8_t spiTransferByte(SPI_TypeDef *instance, uint8_t data)
  */
 bool spiIsBusBusy(SPI_TypeDef *instance)
 {
-#ifdef STM32F303xC
     return SPI_GetTransmissionFIFOStatus(instance) != SPI_TransmissionFIFOStatus_Empty || SPI_I2S_GetFlagStatus(instance, SPI_I2S_FLAG_BSY) == SET;
-#endif
-#ifdef STM32F10X
-    return SPI_I2S_GetFlagStatus(instance, SPI_I2S_FLAG_TXE) == RESET || SPI_I2S_GetFlagStatus(instance, SPI_I2S_FLAG_BSY) == SET;
-#endif
-
 }
 
 void spiTransfer(SPI_TypeDef *instance, uint8_t *out, const uint8_t *in, int len)
@@ -502,25 +435,13 @@ void spiTransfer(SPI_TypeDef *instance, uint8_t *out, const uint8_t *in, int len
             if ((spiTimeout--) == 0)
                 break;
         }
-#ifdef STM32F303xC
         SPI_SendData8(instance, b);
-        //SPI_I2S_SendData16(instance, b);
-#endif
-#ifdef STM32F10X
-        SPI_I2S_SendData(instance, b);
-#endif
         spiTimeout = 1000;
         while (SPI_I2S_GetFlagStatus(instance, SPI_I2S_FLAG_RXNE) == RESET) {
             if ((spiTimeout--) == 0)
                 break;
         }
-#ifdef STM32F303xC
         b = SPI_ReceiveData8(instance);
-        //b = SPI_I2S_ReceiveData16(instance);
-#endif
-#ifdef STM32F10X
-        b = SPI_I2S_ReceiveData(instance);
-#endif
         if (out)
             *(out++) = b;
     }
