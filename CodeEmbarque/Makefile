@@ -339,7 +339,6 @@ hex:    $(HEX)
 clean:
 	rm -f $(BIN) $(HEX) $(ELF) $(OBJS) $(MAP)
 	rm -rf $(OBJ_DIR)/SPRACINGF3
-	cd src/test && $(MAKE) clean || true
 
 ## flash       : flash firmware (.hex) onto flight controller
 flash: $(HEX)
