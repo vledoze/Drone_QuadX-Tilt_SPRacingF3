@@ -20,7 +20,7 @@
          all peripherals are off except internal SRAM, Flash and SWD.
          (+) There is no prescaler on High speed (AHB) and Low speed (APB) busses;
              all peripherals mapped on these busses are running at HSI speed.
-       	 (+) The clock for all peripherals is switched off, except the SRAM and FLASH.
+         (+) The clock for all peripherals is switched off, except the SRAM and FLASH.
          (+) All GPIOs are in input floating state, except the SWD pins which
              are assigned to be used for debug purpose.
     [..] Once the device starts from reset, the user application has to:        
@@ -500,7 +500,6 @@ void RCC_ClockSecuritySystemCmd(FunctionalState NewState)
   *(__IO uint32_t *) CR_CSSON_BB = (uint32_t)NewState;
 }
 
-#ifdef STM32F303xC
 /**
   * @brief  Selects the clock source to output on MCO pin (PA8).
   * @note   PA8 should be configured in alternate function mode.
@@ -534,54 +533,6 @@ void RCC_MCOConfig(uint8_t RCC_MCOSource)
   /* Store the new value */
   RCC->CFGR = tmpreg;
 }
-#else
-
-/**
-  * @brief  Selects the clock source to output on MCO pin (PA8) and the corresponding
-  *         prescsaler.
-  * @note   PA8 should be configured in alternate function mode.
-  * @param  RCC_MCOSource: specifies the clock source to output.
-  *          This parameter can be one of the following values:
-  *            @arg RCC_MCOSource_NoClock: No clock selected.
-  *            @arg RCC_MCOSource_HSI14: HSI14 oscillator clock selected.
-  *            @arg RCC_MCOSource_LSI: LSI oscillator clock selected.
-  *            @arg RCC_MCOSource_LSE: LSE oscillator clock selected.
-  *            @arg RCC_MCOSource_SYSCLK: System clock selected.
-  *            @arg RCC_MCOSource_HSI: HSI oscillator clock selected.
-  *            @arg RCC_MCOSource_HSE: HSE oscillator clock selected.
-  *            @arg RCC_MCOSource_PLLCLK_Div2: PLL clock divided by 2 selected.
-  *            @arg RCC_MCOSource_PLLCLK: PLL clock selected.
-  *            @arg RCC_MCOSource_HSI48: HSI48 clock selected.
-  * @param  RCC_MCOPrescaler: specifies the prescaler on MCO pin.
-  *          This parameter can be one of the following values:
-  *            @arg RCC_MCOPrescaler_1: MCO clock is divided by 1.
-  *            @arg RCC_MCOPrescaler_2: MCO clock is divided by 2.
-  *            @arg RCC_MCOPrescaler_4: MCO clock is divided by 4.
-  *            @arg RCC_MCOPrescaler_8: MCO clock is divided by 8.
-  *            @arg RCC_MCOPrescaler_16: MCO clock is divided by 16.
-  *            @arg RCC_MCOPrescaler_32: MCO clock is divided by 32.
-  *            @arg RCC_MCOPrescaler_64: MCO clock is divided by 64.
-  *            @arg RCC_MCOPrescaler_128: MCO clock is divided by 128.    
-  * @retval None
-  */
-void RCC_MCOConfig(uint8_t RCC_MCOSource, uint32_t RCC_MCOPrescaler)
-{
-  uint32_t tmpreg = 0;
-  
-  /* Check the parameters */
-  assert_param(IS_RCC_MCO_SOURCE(RCC_MCOSource));
-  assert_param(IS_RCC_MCO_PRESCALER(RCC_MCOPrescaler));
-    
-  /* Get CFGR value */  
-  tmpreg = RCC->CFGR;
-  /* Clear MCOPRE[2:0] bits */
-  tmpreg &= ~(RCC_CFGR_MCO_PRE | RCC_CFGR_MCO | RCC_CFGR_PLLNODIV);
-  /* Set the RCC_MCOSource and RCC_MCOPrescaler */
-  tmpreg |= (RCC_MCOPrescaler | RCC_MCOSource<<24);
-  /* Store the new value */
-  RCC->CFGR = tmpreg;
-}
-#endif /* STM32F303xC */
 
 /**
   * @}
@@ -1059,14 +1010,8 @@ void RCC_GetClocksFreq(RCC_ClocksTypeDef* RCC_Clocks)
   /* USART1CLK clock frequency */
   if((RCC->CFGR3 & RCC_CFGR3_USART1SW) == 0x0)
   {
-#if defined(STM32F303x8) || defined(STM32F334x8) || defined(STM32F301x8) || defined(STM32F302x8)
-    /* USART1 Clock is PCLK1 instead of PCLK2 (limitation described in the 
-       STM32F302/01/34 x4/x6/x8 respective erratasheets) */
-    RCC_Clocks->USART1CLK_Frequency = RCC_Clocks->PCLK1_Frequency;
-#else
     /* USART Clock is PCLK2 */
     RCC_Clocks->USART1CLK_Frequency = RCC_Clocks->PCLK2_Frequency;
-#endif  
   }
   else if((RCC->CFGR3 & RCC_CFGR3_USART1SW) == RCC_CFGR3_USART1SW_0)
   {
