@@ -112,7 +112,6 @@ const extiConfig_t *selectMPUIntExtiConfig(void)
     }
 #endif
 
-#if defined(SPRACINGF3) || defined(SPRACINGF3MINI) || defined(SPRACINGF3EVO)
     static const extiConfig_t spRacingF3MPUIntExtiConfig = {
             .gpioAHBPeripherals = RCC_AHBPeriph_GPIOC,
             .gpioPort = GPIOC,
@@ -123,7 +122,6 @@ const extiConfig_t *selectMPUIntExtiConfig(void)
             .exti_irqn = EXTI15_10_IRQn
     };
     return &spRacingF3MPUIntExtiConfig;
-#endif
 
 #if defined(CC3D)
     static const extiConfig_t cc3dMPUIntExtiConfig = {
@@ -553,7 +551,7 @@ static void detectBaro(baroSensor_e baroHardwareToUse)
                 break;
             }
 #endif
-	    ; // fallthough
+        ; // fallthough
         case BARO_BMP280:
 #ifdef USE_BARO_BMP280
             if (bmp280Detect(&baro)) {
@@ -612,7 +610,6 @@ static void detectMag(magSensor_e magHardwareToUse)
     }
 #endif
 
-#ifdef SPRACINGF3
     static const hmc5883Config_t spRacingF3Hmc5883Config = {
         .gpioAHBPeripherals = RCC_AHBPeriph_GPIOC,
         .gpioPin = Pin_14,
@@ -624,7 +621,6 @@ static void detectMag(magSensor_e magHardwareToUse)
     };
 
     hmc5883Config = &spRacingF3Hmc5883Config;
-#endif
 
 #endif
 

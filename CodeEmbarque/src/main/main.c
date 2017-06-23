@@ -345,11 +345,11 @@ void init(void)
     serialInit(feature(FEATURE_SOFTSERIAL));
 
     //Tri des ports SERIAL inutilisés / version materiel
-    #if defined(SPRACINGF3) && defined(SONAR) && defined(USE_SOFTSERIAL2)
+    #if defined(SONAR) && defined(USE_SOFTSERIAL2)
         if (feature(FEATURE_SONAR) && feature(FEATURE_SOFTSERIAL)) {
             serialRemovePort(SERIAL_PORT_SOFTSERIAL2);
         }
-    #endif //(SPRACINGF3)&&(SONAR)&&(USE_SOFTSERIAL2)
+    #endif //(SONAR)&&(USE_SOFTSERIAL2)
 
     //Initialisation PWM
     // -- Par defaut tous les paramètre PWM sont "false"
