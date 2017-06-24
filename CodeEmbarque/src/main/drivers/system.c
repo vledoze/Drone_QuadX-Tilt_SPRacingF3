@@ -85,20 +85,6 @@ void EXTI15_10_IRQHandler(void)
     extiHandler(EXTI15_10_IRQn);
 }
 
-#if defined(CC3D)
- void EXTI3_IRQHandler(void)
-{
-    extiHandler(EXTI3_IRQn);
-}
-#endif
-
-#if defined(COLIBRI_RACE) || defined(LUX_RACE)
-void EXTI9_5_IRQHandler(void)
-{
-    extiHandler(EXTI9_5_IRQn);
-}
-#endif
-
 // cycles per microsecond
 static uint32_t usTicks = 0;
 // current uptime for 1kHz systick timer. will rollover after 49 days. hopefully we won't care.

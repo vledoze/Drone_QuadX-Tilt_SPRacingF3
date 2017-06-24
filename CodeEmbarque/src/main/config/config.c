@@ -194,36 +194,6 @@ static void validateAndFixConfig(void)
 #endif
 #endif // LED_STRIP
 
-#if defined(CC3D)
-#if defined(DISPLAY) && defined(USE_UART3)
-    if (featureConfigured(FEATURE_DISPLAY) && doesConfigurationUsePort(SERIAL_PORT_UART3)) {
-        featureClear(FEATURE_DISPLAY);
-    }
-#endif
-
-#if defined(SONAR) && defined(USE_SOFTSERIAL1)
-    if (featureConfigured(FEATURE_SONAR) && featureConfigured(FEATURE_SOFTSERIAL)) {
-        featureClear(FEATURE_SONAR);
-    }
-#endif
-
-#if defined(SONAR) && defined(USE_SOFTSERIAL1) && defined(RSSI_ADC_GPIO)
-    // shared pin
-    if ((featureConfigured(FEATURE_SONAR) + featureConfigured(FEATURE_SOFTSERIAL) + featureConfigured(FEATURE_RSSI_ADC)) > 1) {
-        featureClear(FEATURE_SONAR);
-        featureClear(FEATURE_SOFTSERIAL);
-        featureClear(FEATURE_RSSI_ADC);
-    }
-#endif
-#endif // CC3D
-
-#if defined(COLIBRI_RACE)
-    serialConfig()->portConfigs[0].functionMask = FUNCTION_MSP;
-    if (featureConfigured(FEATURE_RX_SERIAL)) {
-        serialConfig()->portConfigs[2].functionMask = FUNCTION_RX_SERIAL;
-    }
-#endif
-
     if (!isSerialConfigValid(serialConfig())) {
         PG_RESET_CURRENT(serialConfig);
     }
