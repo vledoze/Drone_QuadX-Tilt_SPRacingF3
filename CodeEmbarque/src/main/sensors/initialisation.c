@@ -83,35 +83,6 @@ uint8_t detectedSensors[MAX_SENSORS_TO_DETECT] = { GYRO_NONE, ACC_NONE, BARO_NON
 
 const extiConfig_t *selectMPUIntExtiConfig(void)
 {
-#ifdef NAZE
-    // MPU_INT output on rev4 PB13
-    static const extiConfig_t nazeRev4MPUIntExtiConfig = {
-            .gpioAPB2Peripherals = RCC_APB2Periph_GPIOB,
-            .gpioPin = Pin_13,
-            .gpioPort = GPIOB,
-            .exti_port_source = GPIO_PortSourceGPIOB,
-            .exti_line = EXTI_Line13,
-            .exti_pin_source = GPIO_PinSource13,
-            .exti_irqn = EXTI15_10_IRQn
-    };
-    // MPU_INT output on rev5 hardware PC13
-    static const extiConfig_t nazeRev5MPUIntExtiConfig = {
-            .gpioAPB2Peripherals = RCC_APB2Periph_GPIOC,
-            .gpioPin = Pin_13,
-            .gpioPort = GPIOC,
-            .exti_port_source = GPIO_PortSourceGPIOC,
-            .exti_line = EXTI_Line13,
-            .exti_pin_source = GPIO_PinSource13,
-            .exti_irqn = EXTI15_10_IRQn
-    };
-
-    if (hardwareRevision < NAZE32_REV5) {
-        return &nazeRev4MPUIntExtiConfig;
-    } else {
-        return &nazeRev5MPUIntExtiConfig;
-    }
-#endif
-
     static const extiConfig_t spRacingF3MPUIntExtiConfig = {
             .gpioAHBPeripherals = RCC_AHBPeriph_GPIOC,
             .gpioPort = GPIOC,
@@ -375,11 +346,7 @@ retry:
 #ifdef USE_ACC_ADXL345
             acc_params.useFifo = false;
             acc_params.dataRate = 800; // unused currently
-#ifdef NAZE
-            sensorDetected = (hardwareRevision < NAZE32_REV5) && adxl345Detect(&acc_params, &acc);
-#else
             sensorDetected = adxl345Detect(&acc_params, &acc);
-#endif
             if (sensorDetected) {
 #ifdef ACC_ADXL345_ALIGN
                 accAlign = ACC_ADXL345_ALIGN;
@@ -413,11 +380,7 @@ retry:
             ; // fallthrough
         case ACC_MMA8452: // MMA8452
 #ifdef USE_ACC_MMA8452
-#ifdef NAZE
-            sensorDetected = (hardwareRevision < NAZE32_REV5) && mma8452Detect(&acc);
-#else
             sensorDetected = mma8452Detect(&acc);
-#endif
             if (sensorDetected) {
 #ifdef ACC_MMA8452_ALIGN
                 accAlign = ACC_MMA8452_ALIGN;
@@ -524,12 +487,6 @@ static void detectBaro(baroSensor_e baroHardwareToUse)
     bmp085Config = &defaultBMP085Config;
 #endif
 
-#ifdef NAZE
-    if (hardwareRevision == NAZE32) {
-        bmp085Disable(bmp085Config);
-    }
-#endif
-
 #endif
 
     switch (baroHardware) {
@@ -580,35 +537,6 @@ static void detectMag(magSensor_e magHardwareToUse)
 
 #ifdef USE_MAG_HMC5883
     const hmc5883Config_t *hmc5883Config = 0;
-
-#ifdef NAZE
-    static const hmc5883Config_t nazeHmc5883Config_v1_v4 = {
-            .gpioAPB2Peripherals = RCC_APB2Periph_GPIOB,
-            .gpioPin = Pin_12,
-            .gpioPort = GPIOB,
-
-            /* Disabled for v4 needs more work.
-            .exti_port_source = GPIO_PortSourceGPIOB,
-            .exti_pin_source = GPIO_PinSource12,
-            .exti_line = EXTI_Line12,
-            .exti_irqn = EXTI15_10_IRQn
-            */
-    };
-    static const hmc5883Config_t nazeHmc5883Config_v5 = {
-            .gpioAPB2Peripherals = RCC_APB2Periph_GPIOC,
-            .gpioPin = Pin_14,
-            .gpioPort = GPIOC,
-            .exti_port_source = GPIO_PortSourceGPIOC,
-            .exti_line = EXTI_Line14,
-            .exti_pin_source = GPIO_PinSource14,
-            .exti_irqn = EXTI15_10_IRQn
-    };
-    if (hardwareRevision < NAZE32_REV5) {
-        hmc5883Config = &nazeHmc5883Config_v1_v4;
-    } else {
-        hmc5883Config = &nazeHmc5883Config_v5;
-    }
-#endif
 
     static const hmc5883Config_t spRacingF3Hmc5883Config = {
         .gpioAHBPeripherals = RCC_AHBPeriph_GPIOC,

@@ -40,10 +40,6 @@
 #include "sensors/sensors.h"
 #include "sensors/compass.h"
 
-#ifdef NAZE
-#include "hardware_revision.h"
-#endif
-
 PG_REGISTER_PROFILE_WITH_RESET_TEMPLATE(compassConfig_t, compassConfig, PG_COMPASS_CONFIGURATION, 0);
 
 PG_RESET_TEMPLATE(compassConfig_t, compassConfig,
