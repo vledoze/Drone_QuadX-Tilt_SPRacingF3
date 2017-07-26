@@ -31,7 +31,7 @@
 
 #include "common/maths.h"
 
-#define MAX_PWM_OUTPUT_PORTS MAX(MAX_MOTORS, MAX_SERVOS)
+#define MAX_PWM_OUTPUT_PORTS 8
 
 typedef void (*pwmWriteFuncPtr)(uint8_t index, uint16_t value);  // function pointer used to write motors
 
@@ -45,10 +45,7 @@ typedef struct {
 static pwmOutputPort_t pwmOutputPorts[MAX_PWM_OUTPUT_PORTS];
 
 static pwmOutputPort_t *motors[MAX_PWM_MOTORS];
-
-#ifdef USE_SERVOS
 static pwmOutputPort_t *servos[MAX_PWM_SERVOS];
-#endif
 
 static uint8_t allocatedOutputPortCount = 0;
 
@@ -209,7 +206,6 @@ void pwmOneshotMotorConfig(const timerHardware_t *timerHardware, uint8_t motorIn
     motors[motorIndex]->pwmWritePtr = pwmWriteStandard;
 }
 
-#ifdef USE_SERVOS
 void pwmServoConfig(const timerHardware_t *timerHardware, uint8_t servoIndex, uint16_t servoPwmRate, uint16_t servoCenterPulse)
 {
     servos[servoIndex] = pwmOutConfig(timerHardware, PWM_TIMER_MHZ, 1000000 / servoPwmRate, servoCenterPulse);
@@ -220,4 +216,3 @@ void pwmWriteServo(uint8_t index, uint16_t value)
     if (servos[index] && index < MAX_SERVOS)
         *servos[index]->ccr = value;
 }
-#endif

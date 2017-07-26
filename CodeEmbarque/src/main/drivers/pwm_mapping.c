@@ -80,74 +80,6 @@ enum {
     MAP_TO_SERVO_OUTPUT,
 };
 
-#if defined(OLIMEXINO) || defined(NAZE32PRO) || defined(STM32F3DISCOVERY) || defined(EUSTM32F103RC) || defined(PORT103R) || defined(PORT103V)
-static const uint16_t multiPPM[] = {
-    PWM1  | (MAP_TO_PPM_INPUT << 8),     // PPM input
-    PWM9  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
-    PWM10 | (MAP_TO_MOTOR_OUTPUT << 8),     // Swap to servo if needed
-    PWM11 | (MAP_TO_MOTOR_OUTPUT << 8),
-    PWM12 | (MAP_TO_MOTOR_OUTPUT << 8),
-    PWM13 | (MAP_TO_MOTOR_OUTPUT << 8),
-    PWM14 | (MAP_TO_MOTOR_OUTPUT << 8),
-    PWM5  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
-    PWM6  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
-    PWM7  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
-    PWM8  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
-    0xFFFF
-};
-
-static const uint16_t multiPWM[] = {
-    PWM1  | (MAP_TO_PWM_INPUT << 8),     // input #1
-    PWM2  | (MAP_TO_PWM_INPUT << 8),
-    PWM3  | (MAP_TO_PWM_INPUT << 8),
-    PWM4  | (MAP_TO_PWM_INPUT << 8),
-    PWM5  | (MAP_TO_PWM_INPUT << 8),
-    PWM6  | (MAP_TO_PWM_INPUT << 8),
-    PWM7  | (MAP_TO_PWM_INPUT << 8),
-    PWM8  | (MAP_TO_PWM_INPUT << 8),     // input #8
-    PWM9  | (MAP_TO_MOTOR_OUTPUT  << 8),      // motor #1 or servo #1 (swap to servo if needed)
-    PWM10 | (MAP_TO_MOTOR_OUTPUT  << 8),     // motor #2 or servo #2 (swap to servo if needed)
-    PWM11 | (MAP_TO_MOTOR_OUTPUT  << 8),     // motor #1 or #3
-    PWM12 | (MAP_TO_MOTOR_OUTPUT  << 8),
-    PWM13 | (MAP_TO_MOTOR_OUTPUT  << 8),
-    PWM14 | (MAP_TO_MOTOR_OUTPUT  << 8),     // motor #4 or #6
-    0xFFFF
-};
-
-static const uint16_t airPPM[] = {
-    PWM1  | (MAP_TO_PPM_INPUT << 8),     // PPM input
-    PWM9  | (MAP_TO_MOTOR_OUTPUT  << 8),      // motor #1
-    PWM10 | (MAP_TO_MOTOR_OUTPUT  << 8),     // motor #2
-    PWM11 | (MAP_TO_SERVO_OUTPUT  << 8),     // servo #1
-    PWM12 | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM13 | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM14 | (MAP_TO_SERVO_OUTPUT  << 8),     // servo #4
-    PWM5  | (MAP_TO_SERVO_OUTPUT  << 8),      // servo #5
-    PWM6  | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM7  | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM8  | (MAP_TO_SERVO_OUTPUT  << 8),      // servo #8
-    0xFFFF
-};
-
-static const uint16_t airPWM[] = {
-    PWM1  | (MAP_TO_PWM_INPUT << 8),     // input #1
-    PWM2  | (MAP_TO_PWM_INPUT << 8),
-    PWM3  | (MAP_TO_PWM_INPUT << 8),
-    PWM4  | (MAP_TO_PWM_INPUT << 8),
-    PWM5  | (MAP_TO_PWM_INPUT << 8),
-    PWM6  | (MAP_TO_PWM_INPUT << 8),
-    PWM7  | (MAP_TO_PWM_INPUT << 8),
-    PWM8  | (MAP_TO_PWM_INPUT << 8),     // input #8
-    PWM9  | (MAP_TO_MOTOR_OUTPUT  << 8),      // motor #1
-    PWM10 | (MAP_TO_MOTOR_OUTPUT  << 8),     // motor #2
-    PWM11 | (MAP_TO_SERVO_OUTPUT  << 8),     // servo #1
-    PWM12 | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM13 | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM14 | (MAP_TO_SERVO_OUTPUT  << 8),     // servo #4
-    0xFFFF
-};
-#endif
-
 static const uint16_t multiPPM[] = {
     PWM1  | (MAP_TO_PPM_INPUT    << 8), // PPM input
 
@@ -167,7 +99,7 @@ static const uint16_t multiPPM[] = {
 };
 
 static const uint16_t multiPWM[] = {
-    PWM1  | (MAP_TO_PWM_INPUT << 8),
+    PWM1  | (MAP_TO_PWM_INPUT << 8),    //ENTREE RC 
     PWM2  | (MAP_TO_PWM_INPUT << 8),
     PWM3  | (MAP_TO_PWM_INPUT << 8),
     PWM4  | (MAP_TO_PWM_INPUT << 8),
@@ -175,14 +107,14 @@ static const uint16_t multiPWM[] = {
     PWM6  | (MAP_TO_PWM_INPUT << 8),
     PWM7  | (MAP_TO_PWM_INPUT << 8),
     PWM8  | (MAP_TO_PWM_INPUT << 8),
-    PWM9  | (MAP_TO_MOTOR_OUTPUT  << 8),
+    PWM9  | (MAP_TO_MOTOR_OUTPUT  << 8), //MOTORS
     PWM10 | (MAP_TO_MOTOR_OUTPUT  << 8),
     PWM11 | (MAP_TO_MOTOR_OUTPUT  << 8),
     PWM12 | (MAP_TO_MOTOR_OUTPUT  << 8),
-    PWM13 | (MAP_TO_MOTOR_OUTPUT  << 8),
-    PWM14 | (MAP_TO_MOTOR_OUTPUT  << 8),
-    PWM15 | (MAP_TO_MOTOR_OUTPUT  << 8),
-    PWM16 | (MAP_TO_MOTOR_OUTPUT  << 8),
+    PWM13 | (MAP_TO_SERVO_OUTPUT  << 8), //SERVOS
+    PWM14 | (MAP_TO_SERVO_OUTPUT  << 8),
+    PWM15 | (MAP_TO_SERVO_OUTPUT  << 8),
+    PWM16 | (MAP_TO_SERVO_OUTPUT  << 8),
     0xFFFF
 };
 
@@ -245,12 +177,6 @@ pwmIOConfiguration_t *pwmInit(drv_pwm_config_t *init)
 
 
     memset(&pwmIOConfiguration, 0, sizeof(pwmIOConfiguration));
-
-    // this is pretty hacky shit, but it will do for now. array of 4 config maps, [ multiPWM multiPPM airPWM airPPM ]  PWM mappings are used for RX_MSP.
-    if (init->airplane)
-        i = 2; // switch to air hardware config
-    if (init->usePPM || init->useSerialRx)
-        i++; // next index is for PPM
 
     setup = hardwareMaps[i];
 
@@ -345,24 +271,8 @@ pwmIOConfiguration_t *pwmInit(drv_pwm_config_t *init)
 
         if (type == MAP_TO_PWM_INPUT && !init->useParallelPWM)
             continue;
-
         if (type == MAP_TO_PPM_INPUT && !init->usePPM)
             continue;
-
-#ifdef USE_SERVOS
-        if (init->useServos && !init->airplane) {
-            // remap PWM15+16 as servos
-            if ((timerIndex == PWM15 || timerIndex == PWM16) && timerHardwarePtr->tim == TIM15)
-                type = MAP_TO_SERVO_OUTPUT;
-        }
-
-        if (init->useChannelForwarding && !init->airplane) {
-                // remap PWM5..8 as servos when used in extended servo mode
-                if (timerIndex >= PWM5 && timerIndex <= PWM8)
-                    type = MAP_TO_SERVO_OUTPUT;
-        }
-
-#endif // USE_SERVOS
 
         if (type == MAP_TO_PPM_INPUT) {
             ppmInConfig(timerHardwarePtr);
@@ -396,7 +306,6 @@ pwmIOConfiguration_t *pwmInit(drv_pwm_config_t *init)
             pwmIOConfiguration.motorCount++;
 
         } else if (type == MAP_TO_SERVO_OUTPUT) {
-#ifdef USE_SERVOS
             pwmServoConfig(timerHardwarePtr, pwmIOConfiguration.servoCount, init->servoPwmRate, init->servoCenterPulse);
 
             pwmIOConfiguration.ioConfigurations[pwmIOConfiguration.ioCount].flags = PWM_PF_SERVO | PWM_PF_OUTPUT_PROTOCOL_PWM;
@@ -404,7 +313,6 @@ pwmIOConfiguration_t *pwmInit(drv_pwm_config_t *init)
             pwmIOConfiguration.ioConfigurations[pwmIOConfiguration.ioCount].timerHardware = timerHardwarePtr;
 
             pwmIOConfiguration.servoCount++;
-#endif
         } else {
             continue;
         }
