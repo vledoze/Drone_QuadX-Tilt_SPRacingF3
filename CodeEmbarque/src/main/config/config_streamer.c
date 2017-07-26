@@ -22,16 +22,10 @@
 #include <string.h>
 
 #if !defined(FLASH_PAGE_SIZE)
-# if defined(STM32F303xC)
-#  define FLASH_PAGE_SIZE                 (0x800)
-# elif defined(STM32F10X_MD)
-#  define FLASH_PAGE_SIZE                 (0x400)
-# elif defined(STM32F10X_HD)
-#  define FLASH_PAGE_SIZE                 (0x800)
-# elif defined(UNIT_TEST)
+# if defined(UNIT_TEST)
 #  define FLASH_PAGE_SIZE                 (0x400)
 # else
-#  error "Flash page size not defined for target."
+#  define FLASH_PAGE_SIZE                 (0x800)
 # endif
 #endif
 
@@ -50,14 +44,8 @@ void config_streamer_start(config_streamer_t *c, uintptr_t base, int size)
         c->unlocked = true;
     }
 
-#if defined(STM32F303)
+#if !defined(UNIT_TEST)
     FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPERR);
-#elif defined(STM32F10X)
-    FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
-#elif defined(UNIT_TEST)
-    // NOP
-#else
-# error "Unsupported CPU"
 #endif
     c->err = 0;
 }

@@ -86,17 +86,10 @@ void hcsr04_init(const sonarHardware_t *initialSonarHardware, sonarRange_t *sona
     gpio_config_t gpio;
     EXTI_InitTypeDef EXTIInit;
 
-#ifdef STM32F10X
-    // enable AFIO for EXTI support
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
-#endif
-
-#ifdef STM32F303xC
     RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOB, ENABLE);
 
     /* Enable SYSCFG clock otherwise the EXTI irq handlers are not called */
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG, ENABLE);
-#endif
 
     // trigger pin
     gpio.pin = sonarHardware->trigger_pin;
@@ -109,14 +102,7 @@ void hcsr04_init(const sonarHardware_t *initialSonarHardware, sonarRange_t *sona
     gpio.mode = Mode_IN_FLOATING;
     gpioInit(sonarHardware->echo_gpio, &gpio);
 
-#ifdef STM32F10X
-    // setup external interrupt on echo pin
-    gpioExtiLineConfig(GPIO_PortSourceGPIOB, sonarHardware->exti_pin_source);
-#endif
-
-#ifdef STM32F303xC
     gpioExtiLineConfig(EXTI_PortSourceGPIOB, sonarHardware->exti_pin_source);
-#endif
 
     EXTI_ClearITPendingBit(sonarHardware->exti_line);
 

@@ -85,20 +85,6 @@ void EXTI15_10_IRQHandler(void)
     extiHandler(EXTI15_10_IRQn);
 }
 
-#if defined(CC3D)
- void EXTI3_IRQHandler(void)
-{
-    extiHandler(EXTI3_IRQn);
-}
-#endif
-
-#if defined(COLIBRI_RACE) || defined(LUX_RACE)
-void EXTI9_5_IRQHandler(void)
-{
-    extiHandler(EXTI9_5_IRQn);
-}
-#endif
-
 // cycles per microsecond
 static uint32_t usTicks = 0;
 // current uptime for 1kHz systick timer. will rollover after 49 days. hopefully we won't care.
@@ -144,19 +130,8 @@ uint32_t millis(void)
 
 void systemInit(void)
 {
-#ifdef CC3D
-    /* Accounts for OP Bootloader, set the Vector Table base address as specified in .ld file */
-    extern void *isr_vector_table_base;
-
-    NVIC_SetVectorTable((uint32_t)&isr_vector_table_base, 0x0);
-#endif
     // Configure NVIC preempt/priority groups
     NVIC_PriorityGroupConfig(NVIC_PRIORITY_GROUPING);
-
-#ifdef STM32F10X
-    // Turn on clocks for stuff we use
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
-#endif
 
     // cache RCC->CSR value to use it in isMPUSoftreset() and others
     cachedRccCsrValue = RCC->CSR;
@@ -165,12 +140,6 @@ void systemInit(void)
     enableGPIOPowerUsageAndNoiseReductions();
 
     usartInitAllIOSignals();
-
-#ifdef STM32F10X
-    // Turn off JTAG port 'cause we're using the GPIO for leds
-#define AFIO_MAPR_SWJ_CFG_NO_JTAG_SW            (0x2 << 24)
-    AFIO->MAPR |= AFIO_MAPR_SWJ_CFG_NO_JTAG_SW;
-#endif
 
     // Init cycle counter
     cycleCounterInit();

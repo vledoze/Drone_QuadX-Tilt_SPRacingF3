@@ -105,7 +105,8 @@ void initServoFilter(uint32_t targetLooptime){
 }
 
 void servoMixer(uint8_t phaseDeVol){
-    if (phaseDeVol == VOL_AVION) {
+    UNUSED(phaseDeVol);
+    //if (phaseDeVol == VOL_AVION) {
         static int16_t output[MAX_SERVO_RULES];
                int16_t input[INPUT_SOURCE_COUNT]; // Range [-500:+500]
 
@@ -138,53 +139,52 @@ void servoMixer(uint8_t phaseDeVol){
 
         //initialisation des commandes aux servos
         for (uint8_t i = 0; i < MAX_SUPPORTED_SERVOS; i++){
-            //Init cmd
-            servoCmd[i] = 0;
-
             // mix servos
             uint8_t  target = servoMixerVTOL[i].targetChannel;
             uint8_t  from   = servoMixerVTOL[i].inputSource;
             uint16_t width  = servoConfVTOL[target].max - servoConfVTOL[target].min;
             int16_t  min    = servoMixerVTOL[i].min * width / 100 - width / 2;
             int16_t  max    = servoMixerVTOL[i].max * width / 100 - width / 2;
+           
+           //Init cmd
+            servoCmd[target] = 0;
+
 
             //Calcul de la sortie (nombre entier)
             if (servoMixerVTOL[i].speed == 0)
                 //Vitesse des servo infinie : sortie - entrée
-                output[i] = input[from];
+                output[target] = input[from];
             else {
                 //Vitesse des servo finie (v)
-                if (output[i] < input[from]){
+                if (output[target] < input[from]){
                     // Sortie (o) en vitesse : o = o+v contraint dans [o, i]
-                    output[i] = constrain(output[i] + servoMixerVTOL[i].speed, output[i], input[from]);
-                }else if (output[i] > input[from]){
+                    output[target] = constrain(output[target] + servoMixerVTOL[i].speed, output[target], input[from]);
+                }else if (output[target] > input[from]){
                     // Sortie (o) en vitesse : o = o-v contraint dans [o, i]
-                    output[i] = constrain(output[i] - servoMixerVTOL[i].speed, input[from], output[i]);
+                    output[target] = constrain(output[target] - servoMixerVTOL[i].speed, input[from], output[target]);
                 }
             }
-
             //Commande c = c +/- o*(%vmax)
-            servoCmd[target] += servoDirection(target, from) * constrain(((int32_t)output[i] * servoMixerVTOL[i].rate) / 100, min, max);
+            servoCmd[target] += servoDirection(target, from) * constrain(((int32_t)output[target] * servoMixerVTOL[i].rate) / 100, min, max);
             //Taux de commande (c) à prendre en compte : c = c*(%cmax)
-            servoCmd[i]  = ((int32_t)servoConfVTOL[i].rate * servoCmd[i]) / 100L;
+            servoCmd[target]  = ((int32_t)servoConfVTOL[i].rate * servoCmd[target]) / 100L;
             //La commande est relative a la position "milieu" du servo
-            servoCmd[i] += servoConfVTOL[i].middle;
+            servoCmd[target] += servoConfVTOL[i].middle;
             //On borne la commande
-            servoCmd[i] = constrain(servoCmd[i], servoConfVTOL[i].min, servoConfVTOL[i].max); // limit the values
+            servoCmd[target] = constrain(servoCmd[target], servoConfVTOL[i].min, servoConfVTOL[i].max); // limit the values
         }
-    }
+    /*}
     else{
         for (uint8_t i = 0; i < MAX_SUPPORTED_SERVOS; i++){
             //Init cmd
             servoCmd[i] = 0;
         }
-    }
+    }*/
 }
 
 void filterServos(void){
 #if defined(MIXER_DEBUG)
     uint32_t startTime = micros();
-
 #endif
     if (mixerConfigVTOL.servo_lowpass_enable) {
         for (uint8_t i = 0; i < MAX_SUPPORTED_SERVOS; i++) {
@@ -200,10 +200,10 @@ void filterServos(void){
 }
 
 void writeServos(void){
-    pwmWriteServo(1, servoCmd[SERVO_ELEVATOR]);
-    pwmWriteServo(2, servoCmd[SERVO_FLAPPERON]);
-    pwmWriteServo(3, servoCmd[SERVO_RUDDER]);
-    pwmWriteServo(4, servoCmd[SERVO_AUX1]);
+    pwmWriteServo(0, servoCmd[SERVO_ELEVATOR]);
+    pwmWriteServo(1, servoCmd[SERVO_FLAPPERON]);
+    pwmWriteServo(2, servoCmd[SERVO_RUDDER]);
+    pwmWriteServo(3, servoCmd[SERVO_AUX1]);
 }
 
 bool isMixerUsingServos(void){

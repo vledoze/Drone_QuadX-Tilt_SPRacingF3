@@ -129,15 +129,7 @@ const sonarHardware_t *sonarGetHardwareConfiguration(currentSensor_e  currentMet
 void  sonarInit(const sonarHardware_t *sonarHardware);
 
 //Déclaration fonction initialisation horloge interne
-#ifdef STM32F303xC
-    // from system_stm32f30x.c
-    void SetSysClock(void);
-#endif //STM32F303xC
-
-#ifdef STM32F10X
-    // from system_stm32f10x.c
-    void SetSysClock(bool overclock);
-#endif //STM32F10X
+void SetSysClock(void);
 
 //Déclaration fonctions initialisation Systeme
 // -- Fonctions initialisations pour un type "systemConfig_t"
@@ -268,20 +260,11 @@ void init(void)
     systemState |= SYSTEM_STATE_CONFIG_LOADED;
 
     //INITIALISATION SYSTEME ==================================
-    //TODO quoi ?
-    #ifdef STM32F303
-        SCB->CPACR = (0x3 << (10*2)) | (0x3 << (11*2));  // start fpu
-    #endif // STM32F303
+    SCB->CPACR = (0x3 << (10*2)) | (0x3 << (11*2));  // start fpu
 
     //Mise en place horloge systeme
-    #ifdef STM32F303xC
-        SetSysClock();
-    #endif //STM32F303xC
-    #ifdef STM32F10X
-        // Configure the System clock frequency, HCLK, PCLK2 and PCLK1 prescalers
-        // Configure the Flash Latency cycles and enable prefetch buffer
-        SetSysClock(systemConfig()->emf_avoidance);
-    #endif //STM32F10X
+    SetSysClock();
+    
     //Mise en place over-clock horloge systeme
     i2cSetOverclock(systemConfig()->i2c_highspeed);
 
@@ -297,15 +280,7 @@ void init(void)
     latchActiveFeatures();
 
     //Initialisation LED
-    #ifdef ALIENFLIGHTF3
-        if (hardwareRevision == AFF3_REV_1) {
-            ledInit(false);
-        } else {
-            ledInit(true);
-        }
-    #else
-        ledInit(false);
-    #endif //ALIENFLIGHTF3
+    ledInit(false);
 
     //Initialisation BEEPER
     #ifdef BEEPER
@@ -321,15 +296,6 @@ void init(void)
             beeperConfig.isInverted = false;
         #endif //BEEPER_INVERTED
 
-        //Forcage configuration BEEPER : cas spéciaux NAZE
-        #ifdef NAZE
-            if (hardwareRevision >= NAZE32_REV5) {
-                // naze rev4 and below used opendrain to PNP for buzzer.
-                // Rev5 and above use PP to NPN.
-                beeperConfig.gpioMode   = Mode_Out_PP;
-                beeperConfig.isInverted = true;
-            }
-        #endif //NAZE
         //Initialisation BEEPER avec la configuration choisie
         beeperInit(&beeperConfig);
     #endif //BEEPER
@@ -379,23 +345,11 @@ void init(void)
     serialInit(feature(FEATURE_SOFTSERIAL));
 
     //Tri des ports SERIAL inutilisés / version materiel
-    #ifdef NAZE
-        if (hardwareRevision == NAZE32_SP) {
-            serialRemovePort(SERIAL_PORT_SOFTSERIAL2);
-        } else  {
-            serialRemovePort(SERIAL_PORT_UART3);
-        }
-    #endif //NAZE
-    #if defined(SPRACINGF3) && defined(SONAR) && defined(USE_SOFTSERIAL2)
+    #if defined(SONAR) && defined(USE_SOFTSERIAL2)
         if (feature(FEATURE_SONAR) && feature(FEATURE_SOFTSERIAL)) {
             serialRemovePort(SERIAL_PORT_SOFTSERIAL2);
         }
-    #endif //(SPRACINGF3)&&(SONAR)&&(USE_SOFTSERIAL2)
-    #if defined(SPRACINGF3MINI) && defined(SONAR) && defined(USE_SOFTSERIAL1)
-        if (feature(FEATURE_SONAR) && feature(FEATURE_SOFTSERIAL)) {
-            serialRemovePort(SERIAL_PORT_SOFTSERIAL1);
-        }
-    #endif //(SPRACINGF3MINI)&&(SONAR)&&(USE_SOFTSERIAL2)
+    #endif //(SONAR)&&(USE_SOFTSERIAL2)
 
     //Initialisation PWM
     // -- Par defaut tous les paramètre PWM sont "false"
@@ -403,9 +357,6 @@ void init(void)
     // -- Configuration PWM : airplane mode (true/false)
     pwm_params.airplane = false;
     // -- Configuration PWM : Utilisation des ports SERIAL UART (true/false)
-    #if defined(USE_UART2) && defined(STM32F10X)
-        pwm_params.useUART2 = doesConfigurationUsePort(SERIAL_PORT_UART2);
-    #endif
     #if defined(USE_UART3)
         pwm_params.useUART3 = doesConfigurationUsePort(SERIAL_PORT_UART3);
     #endif
@@ -471,34 +422,12 @@ void init(void)
     #ifdef USE_SPI
         spiInit(SPI1);
         spiInit(SPI2);
-        #ifdef STM32F303xC
-            #ifdef ALIENFLIGHTF3
-                if (hardwareRevision == AFF3_REV_2) {
-                    spiInit(SPI3);
-                }
-            #else
-                spiInit(SPI3);
-            #endif //ALIENFLIGHTF3
-        #endif //STM32F303xC
+        spiInit(SPI3);
     #endif //USE_SPI
 
     //Initilisation I2C
     #ifdef USE_I2C
-        #if defined(NAZE)
-            if (hardwareRevision != NAZE32_SP) {
-                i2cInit(I2C_DEVICE);
-            } else {
-                if (!doesConfigurationUsePort(SERIAL_PORT_UART3)) {
-                    i2cInit(I2C_DEVICE);
-                }
-            }
-        #elif defined(CC3D)
-            if (!doesConfigurationUsePort(SERIAL_PORT_UART3)) {
-                i2cInit(I2C_DEVICE);
-            }
-        #else
-            i2cInit(I2C_DEVICE);
-        #endif //(NAZE)||(CC3D)
+        i2cInit(I2C_DEVICE);
     #endif //USE_I2C
 
     //Initialisation ADC
@@ -511,10 +440,6 @@ void init(void)
         #ifdef OLIMEXINO
             adc_params.enableExternal1 = true;
         #endif //OLIMEXINO
-        #ifdef NAZE
-            // optional ADC5 input on rev.5 hardware
-            adc_params.enableExternal1 = (hardwareRevision >= NAZE32_REV5);
-        #endif //NAZE
         //Initialisation signal ADC avec le parametrage choisi
         adcInit(&adc_params);
     #endif //USE_ADC
@@ -652,13 +577,7 @@ void init(void)
     //INITIALISATION MEMOIRE =======================================
     //Initialisation FLASH
     #ifdef USE_FLASHFS
-        #ifdef NAZE
-            if (hardwareRevision == NAZE32_REV5) {
-                m25p16_init();
-            }
-        #elif defined(USE_FLASH_M25P16)
-            m25p16_init();
-        #endif //(NAZE)||(USE_FLASH_M25P16)
+        m25p16_init();
         flashfsInit();
     #endif
 

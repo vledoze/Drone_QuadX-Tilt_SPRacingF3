@@ -19,10 +19,12 @@
 
 #define TARGET_BOARD_IDENTIFIER "SRF3"
 
+#define LED0
 #define LED0_GPIO   GPIOB
 #define LED0_PIN    Pin_3
 #define LED0_PERIPHERAL RCC_AHBPeriph_GPIOB
 
+#define BEEPER
 #define BEEP_GPIO   GPIOC
 #define BEEP_PIN    Pin_15
 #define BEEP_PERIPHERAL RCC_AHBPeriph_GPIOC
@@ -57,9 +59,6 @@
 
 #define USE_FLASHFS
 #define USE_FLASH_M25P16
-
-#define BEEPER
-#define LED0
 
 #define SONAR
 #define SONAR_TRIGGER_PIN           Pin_0   // RC_CH7 (PB0) - only 3.3v ( add a 1K Ohms resistor )
@@ -122,7 +121,6 @@
 #define USE_ADC
 #define BOARD_HAS_VOLTAGE_DIVIDER
 
-
 #define ADC_INSTANCE                ADC2
 #define ADC_DMA_CHANNEL             DMA2_Channel1
 #define ADC_AHB_PERIPHERAL          RCC_AHBPeriph_DMA2
@@ -154,7 +152,6 @@
 #define WS2811_DMA_TC_FLAG              DMA1_FLAG_TC2
 #define WS2811_DMA_HANDLER_IDENTIFER    DMA1_CH2_HANDLER
 
-
 #define DEFAULT_RX_FEATURE FEATURE_RX_PARALLEL_PWM
 
 #define BLACKBOX
@@ -169,7 +166,6 @@
 //#define USE_CLI
 
 #define SPEKTRUM_BIND
-// UART3,
 #define BIND_PORT  GPIOB
 #define BIND_PIN   Pin_11
 
