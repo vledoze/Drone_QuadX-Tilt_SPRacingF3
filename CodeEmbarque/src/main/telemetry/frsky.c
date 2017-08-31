@@ -169,9 +169,9 @@ static void sendAccel(void)
 static void sendBaro(void)
 {
     sendDataHead(ID_ALTITUDE_BP);
-    serialize16(BaroAlt / 100);
+    serialize16(G_baro_altMes / 100);
     sendDataHead(ID_ALTITUDE_AP);
-    serialize16(ABS(BaroAlt % 100));
+    serialize16(ABS(G_baro_altMes % 100));
 }
 
 #ifdef GPS
@@ -345,7 +345,7 @@ static void sendGPSLatLong(void)
 static void sendVario(void)
 {
     sendDataHead(ID_VERT_SPEED);
-    serialize16(vario);
+    serialize16(G_altitude_vzEst);
 }
 
 /*
