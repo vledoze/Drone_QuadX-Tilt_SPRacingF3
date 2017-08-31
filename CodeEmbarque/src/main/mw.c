@@ -634,7 +634,8 @@ void taskMainPidLoop(void)
 
     imuUpdateGyroAndAttitude();
 
-    updateRcCommands(); // this must be called here since applyAltHold directly manipulates rcCommands[]
+    // this must be called here since altitudeApplyAltHold directly manipulates rcCommands[]
+    updateRcCommands();
 
     if (rxConfig()->rcSmoothing) {
         filterRc();
@@ -662,7 +663,7 @@ void taskMainPidLoop(void)
 #if defined(BARO) || defined(SONAR)
         if (sensors(SENSOR_BARO) || sensors(SENSOR_SONAR)) {
             if (FLIGHT_MODE(BARO_MODE) || FLIGHT_MODE(SONAR_MODE)) {
-                applyAltHold();
+                altitudeApplyAltHold();
             }
         }
 #endif
@@ -787,19 +788,19 @@ void taskUpdateRxMain(void)
     isRXDataNew = true;
 
 #ifdef BARO
-    // updateRcCommands() sets rcCommand[], updateAltHoldState depends on valid rcCommand[] data.
+    // updateRcCommands() sets rcCommand[], altitudeUpdateBaroAltHoldState depends on valid rcCommand[] data.
     if (haveUpdatedRcCommandsOnce) {
         if (sensors(SENSOR_BARO)) {
-            updateAltHoldState();
+            altitudeUpdateBaroAltHoldState();
         }
     }
 #endif
 
 #ifdef SONAR
-    // updateRcCommands() sets rcCommand[], updateAltHoldState depends on valid rcCommand[] data.
+    // updateRcCommands() sets rcCommand[], altitudeUpdateBaroAltHoldState depends on valid rcCommand[] data.
     if (haveUpdatedRcCommandsOnce) {
         if (sensors(SENSOR_SONAR)) {
-            updateSonarAltHoldState();
+            altitudeUpdateSonarAltHoldState();
         }
     }
 #endif
@@ -860,7 +861,7 @@ void taskCalculateAltitude(void)
         || sensors(SENSOR_SONAR)
 #endif
         ) {
-        calculateEstimatedAltitude(currentTime);
+        altitudeCalculate(currentTime);
     }}
 #endif
 

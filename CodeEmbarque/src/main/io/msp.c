@@ -650,8 +650,8 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
 
         case MSP_ALTITUDE:
             #if defined(BARO) || defined(SONAR)
-                sbufWriteU32(dst, altitudeHoldGetEstimatedAltitude());
-                sbufWriteU16(dst, vario);
+                sbufWriteU32(dst, G_altitude_altEst);
+                sbufWriteU16(dst, G_altitude_vzEst);
             #else  //(!BARO)&&(!SONAR)
                 sbufWriteU32(dst, 0);
                 sbufWriteU16(dst, 0);
@@ -806,7 +806,7 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
                 sbufWriteU8( dst, wp_no);
                 sbufWriteU32(dst, lat);
                 sbufWriteU32(dst, lon);
-                sbufWriteU32(dst, AltHold);           // altitude (cm) will come here -- temporary implementation to test feature with apps
+                sbufWriteU32(dst, G_altitude_altCmd);           // altitude (cm) will come here -- temporary implementation to test feature with apps
                 sbufWriteU16(dst, 0);                 // heading  will come here (deg)
                 sbufWriteU16(dst, 0);                 // time to stay (ms) will come here
                 sbufWriteU8( dst, 0);                 // nav flag will come here
@@ -1307,12 +1307,12 @@ static int processInCommand(mspPacket_t *cmd)
                     DISABLE_FLIGHT_MODE(GPS_HOME_MODE);     // with this flag, GPS_set_next_wp will be called in the next loop -- OK with SERIAL GPS / OK with I2C GPS
                     ENABLE_STATE(GPS_FIX_HOME);
                     if (alt != 0)
-                        AltHold = alt;                      // temporary implementation to test feature with apps
+                        G_altitude_altCmd = alt;                      // temporary implementation to test feature with apps
                 } else if (wp_no == 16) {                   // OK with SERIAL GPS  --  NOK for I2C GPS / needs more code dev in order to inject GPS coord inside I2C GPS
                     GPS_hold[LAT] = lat;
                     GPS_hold[LON] = lon;
                     if (alt != 0)
-                        AltHold = alt;                      // temporary implementation to test feature with apps
+                        G_altitude_altCmd = alt;                      // temporary implementation to test feature with apps
                     nav_mode = NAV_MODE_WP;
                     GPS_set_next_wp(&GPS_hold[LAT], &GPS_hold[LON]);
                 }

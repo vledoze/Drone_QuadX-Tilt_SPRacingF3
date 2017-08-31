@@ -18,22 +18,15 @@
 #include "io/motor_and_servo.h"
 #include "io/rc_controls.h"
 #include "flight/pid.h"
-
 #include "sensors/barometer.h"
 
-extern int32_t AltHold;
-extern int32_t vario;
+// Variables globales
+extern int32_t G_altitude_altEst;
+extern int32_t G_altitude_altCmd;
+extern int32_t G_altitude_vzEst;
 
-typedef struct airplaneConfig_s {
-    int8_t fixedwing_althold_dir;           // +1 or -1 for pitch/althold gain. later check if need more than just sign
-} airplaneConfig_t;
-
-PG_DECLARE(airplaneConfig_t, airplaneConfig);
-
-void calculateEstimatedAltitude(uint32_t currentTime);
-
-void applyAltHold(void);
-void updateAltHoldState(void);
-void updateSonarAltHoldState(void);
-
-int32_t altitudeHoldGetEstimatedAltitude(void);
+// Corp
+void altitudeCalculate(uint32_t currentTime);
+void altitudeApplyAltHold(void);
+void altitudeUpdateBaroAltHoldState(void);
+void altitudeUpdateSonarAltHoldState(void);

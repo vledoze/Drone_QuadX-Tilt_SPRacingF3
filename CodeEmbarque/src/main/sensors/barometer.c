@@ -41,7 +41,7 @@ baro_t baro;                        // barometer access functions
 uint16_t calibratingB = 0;      // baro calibration = get new ground pressure value
 int32_t baroPressure = 0;
 int32_t baroTemperature = 0;
-int32_t BaroAlt = 0;
+int32_t G_baro_altMes = 0;
 
 #ifdef BARO
 
@@ -79,7 +79,7 @@ static int32_t applyBarometerMedianFilter(int32_t newPressureReading)
     static int currentFilterSampleIndex = 0;
     static bool medianFilterReady = false;
     int nextSampleIndex;
-    
+
     nextSampleIndex = (currentFilterSampleIndex + 1);
     if (nextSampleIndex == PRESSURE_SAMPLES_MEDIAN) {
         nextSampleIndex = 0;
@@ -88,7 +88,7 @@ static int32_t applyBarometerMedianFilter(int32_t newPressureReading)
 
     barometerFilterSamples[currentFilterSampleIndex] = newPressureReading;
     currentFilterSampleIndex = nextSampleIndex;
-    
+
     if (medianFilterReady)
         return quickMedianFilter3(barometerFilterSamples);
     else
@@ -155,7 +155,7 @@ uint32_t baroUpdate(void)
     }
 }
 
-int32_t baroCalculateAltitude(void)
+void baroCalculateAltitude(void)
 {
     int32_t BaroAlt_tmp;
 
@@ -163,9 +163,7 @@ int32_t baroCalculateAltitude(void)
     // see: https://github.com/diydrones/ardupilot/blob/master/libraries/AP_Baro/AP_Baro.cpp#L140
     BaroAlt_tmp = lrintf((1.0f - powf((float)(baroPressureSum / PRESSURE_SAMPLE_COUNT) / 101325.0f, 0.190295f)) * 4433000.0f); // in cm
     BaroAlt_tmp -= baroGroundAltitude;
-    BaroAlt = lrintf((float)BaroAlt * barometerConfig()->baro_noise_lpf + (float)BaroAlt_tmp * (1.0f - barometerConfig()->baro_noise_lpf)); // additional LPF to reduce baro noise
-
-    return BaroAlt;
+    G_baro_altMes = lrintf((float)G_baro_altMes * barometerConfig()->baro_noise_lpf + (float)BaroAlt_tmp * (1.0f - barometerConfig()->baro_noise_lpf)); // additional LPF to reduce baro noise
 }
 
 void performBaroCalibrationCycle(void)

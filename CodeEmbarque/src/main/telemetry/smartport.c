@@ -320,7 +320,7 @@ void handleSmartPortTelemetry(void)
             //case FSSP_DATAID_RPM        :
             case FSSP_DATAID_ALTITUDE   :
                 if (sensors(SENSOR_BARO)) {
-                    smartPortSendPackage(id, BaroAlt); // unknown given unit, requested 100 = 1 meter
+                    smartPortSendPackage(id, G_baro_altMes); // unknown given unit, requested 100 = 1 meter
                     smartPortHasRequest = 0;
                 }
                 break;
@@ -357,7 +357,7 @@ void handleSmartPortTelemetry(void)
             //case FSSP_DATAID_CAP_USED   :
             case FSSP_DATAID_VARIO      :
                 if (sensors(SENSOR_BARO)) {
-                    smartPortSendPackage(id, vario); // unknown given unit but requested in 100 = 1m/s
+                    smartPortSendPackage(id, G_altitude_vzEst); // unknown given unit but requested in 100 = 1m/s
                     smartPortHasRequest = 0;
                 }
                 break;

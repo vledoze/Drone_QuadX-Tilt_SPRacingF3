@@ -22,7 +22,7 @@ extern uint32_t accTimeSum;
 extern int accSumCount;
 extern float accVelScale;
 extern int16_t accSmooth[XYZ_AXIS_COUNT];
-extern int32_t accSum[XYZ_AXIS_COUNT];
+extern int32_t G_imu_accSum[XYZ_AXIS_COUNT];
 
 #define DEGREES_TO_DECIDEGREES(angle) (angle * 10)
 #define DECIDEGREES_TO_DEGREES(angle) (angle / 10)

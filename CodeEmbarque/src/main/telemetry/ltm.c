@@ -137,7 +137,7 @@ static void ltm_gframe(void)
     ltm_serialise_8((uint8_t)(GPS_speed / 100));
 
 #if defined(BARO) || defined(SONAR)
-    ltm_alt = (sensors(SENSOR_SONAR) || sensors(SENSOR_BARO)) ? altitudeHoldGetEstimatedAltitude() : GPS_altitude * 100;
+    ltm_alt = (sensors(SENSOR_SONAR) || sensors(SENSOR_BARO)) ? G_altitude_altEst : GPS_altitude * 100;
 #else
     ltm_alt = GPS_altitude * 100;
 #endif

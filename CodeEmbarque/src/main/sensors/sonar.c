@@ -41,10 +41,10 @@
 
 // Sonar measurements are in cm, a value of SONAR_OUT_OF_RANGE indicates sonar is not in range.
 // Inclination is adjusted by imu
-    float baro_cf_vel;                      // apply Complimentary Filter to keep the calculated velocity based on baro velocity (i.e. near real velocity)
-    float baro_cf_alt;                      // apply CF to use ACC for height estimation
+float baro_cf_vel;                      // apply Complimentary Filter to keep the calculated velocity based on baro velocity (i.e. near real velocity)
+float baro_cf_alt;                      // apply CF to use ACC for height estimation
 
-#ifdef SONAR
+int32_t G_sonar_altMes;
 int16_t sonarMaxRangeCm;
 int16_t sonarMaxAltWithTiltCm;
 int16_t sonarCfAltCm; // Complimentary Filter altitude
@@ -160,15 +160,14 @@ int32_t sonarRead(void)
  *
  * When the ground is too far away or the tilt is too large, SONAR_OUT_OF_RANGE is returned.
  */
-int32_t sonarCalculateAltitude(int32_t sonarDistance, float cosTiltAngle)
+void sonarCalculateAltitude(float cosTiltAngle)
 {
     // calculate sonar altitude only if the ground is in the sonar cone
     if (cosTiltAngle <= sonarMaxTiltCos)
-        calculatedAltitude = SONAR_OUT_OF_RANGE;
+        G_sonar_altMes = SONAR_OUT_OF_RANGE;
     else
         // altitude = distance * cos(tiltAngle), use approximation
-        calculatedAltitude = sonarDistance * cosTiltAngle;
-    return calculatedAltitude;
+        G_sonar_altMes = sonarRead() * cosTiltAngle;
 }
 
 /**
@@ -179,5 +178,3 @@ int32_t sonarGetLatestAltitude(void)
 {
     return calculatedAltitude;
 }
-
-#endif

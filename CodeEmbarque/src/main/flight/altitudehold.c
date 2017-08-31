@@ -53,83 +53,100 @@
 
 #include "flight/altitudehold.h"
 
-int32_t setVelocity = 0;
-uint8_t velocityControl = 0;
-int32_t errorVelocityI = 0;
-int32_t altHoldThrottleAdjustment = 0;
-int32_t AltHold;
-int32_t vario = 0;                      // variometer in cm/s
-
-
-#if defined(BARO) || defined(SONAR)
-
-static int16_t initialRawThrottleHold;
-static int16_t initialThrottleHold;
-static int32_t EstAlt;                // in cm
-
-PG_REGISTER_WITH_RESET_TEMPLATE(airplaneConfig_t, airplaneConfig, PG_AIRPLANE_ALT_HOLD_CONFIG, 0);
-
-PG_RESET_TEMPLATE(airplaneConfig_t, airplaneConfig,
-    .fixedwing_althold_dir = 1,
-);
-
-// 40hz update rate (20hz LPF on acc)
-#define BARO_UPDATE_FREQUENCY_40HZ (1000 * 25)
-
+/* Constantes ======================================================= */
+#define BARO_UPDATE_FREQUENCY_40HZ (1000 * 25) // 40hz update rate (20hz LPF on acc)
 #define DEGREES_80_IN_DECIDEGREES 800
+#define THROTTLE_2_VZ   0.5                   //velocity proportional to stick movement +100 throttle gives ~ +50 cm/s
+#define P_ALT_QUANTUM 128     // eq. 2^7
+#define P_VEL_QUANTUM 32      // eq. 2^5
+#define I_VEL_QUANTUM 8192    // eq. 2^15
+#define D_VEL_QUANTUM 512     // eq. 2^9
 
-static void applyMultirotorAltHold(void)
+
+/* Variables ======================================================== */
+/* Static ----------------------------------------------------------- */
+static uint8_t altitude_altCommandedChanged = 0;
+static int16_t altitude_rcDataThrottleHold = 0;
+static int16_t altitude_rcCommandThrottleHold = 0;
+static int32_t altitude_rcCommandThrottleAdjustment = 0;
+static int32_t altitude_sumErrVel = 0;
+static int32_t altitude_vzCommand = 0;              // in cm
+
+/* Global ----------------------------------------------------------- */
+int32_t G_altitude_altEst = 0;
+int32_t G_altitude_altCmd = 0;                   // in cm
+int32_t G_altitude_vzEst = 0;             // variometer in cm/s
+
+
+/* Fonctions ======================================================== */
+/* Static ----------------------------------------------------------- */
+
+/* Fonction    : altitude_isThrustFacingDownwards
+ * Description : Verifie que le drone est relativement a plat
+                    roll in [-80deg; 80deg]
+                    pitch in [-80deg; 80deg]
+ * Entrees     :
+        angles d'euler du drone (attitude)
+ * Sorties     :
+        drone à plat (OUI: true, NON: false)
+*/
+static bool altitude_isThrustFacingDownwards(attitudeEulerAngles_t *attitude)
 {
-    static uint8_t isAltHoldChanged = 0;
-    // multirotor alt hold
-    if (rcControlsConfig()->alt_hold_fast_change) {
-        // rapid alt changes
-        if (ABS(rcData[THROTTLE] - initialRawThrottleHold) > rcControlsConfig()->alt_hold_deadband) {
-            errorVelocityI = 0;
-            isAltHoldChanged = 1;
-            rcCommand[THROTTLE] += (rcData[THROTTLE] > initialRawThrottleHold) ? -rcControlsConfig()->alt_hold_deadband : rcControlsConfig()->alt_hold_deadband;
+    return (    (ABS(attitude->values.roll) < DEGREES_80_IN_DECIDEGREES)
+             && (ABS(attitude->values.pitch) < DEGREES_80_IN_DECIDEGREES) );
+}
+
+/* Fonction    : altitudeCalculateThrottleAdjustement
+ * Description : Calcul la variation de commande a envoyer pour garder l'altitude
+ * Entrees     :
+        Vitesse verticale (G_altitude_vzEst)
+        Acceleration verticale (acczMesIMU)
+        Acceleration verticale precedemment utilisee (acc_old)
+ * Sorties     :
+        Variation de commande THROTTLE (altitude_rcCommandThrottleAdjustment)
+ */
+static void altitudeCalculateThrottleAdjustement(float acczMesIMU, float acczMesIMUOld)
+{
+    int32_t altError;
+    int32_t vzError;
+    int32_t vzCommand;
+
+    if (!altitude_isThrustFacingDownwards(&attitude)) {
+        altitude_rcCommandThrottleAdjustment = 0;
+    }
+    else
+    {
+        // Altitude P-Controller
+        if (!altitude_vzCommand) {
+            altError = constrain(G_altitude_altCmd - G_altitude_altEst, -500, 500);
+            altError = applyDeadband(altError, 10); // remove small P parameter to reduce noise near zero position
+            vzCommand = constrain((pidProfile()->P8[PIDALT] * altError / P_ALT_QUANTUM), -300, +300); // limit velocity to +/- 3 m/s
         } else {
-            if (isAltHoldChanged) {
-                AltHold = EstAlt;
-                isAltHoldChanged = 0;
-            }
-            rcCommand[THROTTLE] = constrain(initialThrottleHold + altHoldThrottleAdjustment, motorAndServoConfig()->minthrottle, motorAndServoConfig()->maxthrottle);
+            vzCommand = altitude_vzCommand;
         }
-    } else {
-        // slow alt changes, mostly used for aerial photography
-        if (ABS(rcData[THROTTLE] - initialRawThrottleHold) > rcControlsConfig()->alt_hold_deadband) {
-            // set velocity proportional to stick movement +100 throttle gives ~ +50 cm/s
-            setVelocity = (rcData[THROTTLE] - initialRawThrottleHold) / 2;
-            velocityControl = 1;
-            isAltHoldChanged = 1;
-        } else if (isAltHoldChanged) {
-            AltHold = EstAlt;
-            velocityControl = 0;
-            isAltHoldChanged = 0;
-        }
-        rcCommand[THROTTLE] = constrain(initialThrottleHold + altHoldThrottleAdjustment, motorAndServoConfig()->minthrottle, motorAndServoConfig()->maxthrottle);
+        // Velocity PID-Controller
+        // P
+        vzError = vzCommand - G_altitude_vzEst;
+        altitude_rcCommandThrottleAdjustment = constrain((pidProfile()->P8[PIDVEL] * vzError / D_VEL_QUANTUM), -300, +300);
+        // I
+        altitude_sumErrVel += (pidProfile()->I8[PIDVEL] * vzError);
+        altitude_sumErrVel = constrain(altitude_sumErrVel, -(I_VEL_QUANTUM * 200), (I_VEL_QUANTUM * 200));
+        altitude_rcCommandThrottleAdjustment += altitude_sumErrVel / I_VEL_QUANTUM;     // I in range +/-200
+        // D
+        altitude_rcCommandThrottleAdjustment -= constrain(pidProfile()->D8[PIDVEL] * (acczMesIMU + acczMesIMUOld) / D_VEL_QUANTUM, -150, 150);
     }
 }
 
-static void applyFixedWingAltHold(void)
-{
-    // handle fixedwing-related althold. UNTESTED! and probably wrong
-    // most likely need to check changes on pitch channel and 'reset' althold similar to
-    // how throttle does it on multirotor
+/* Corp ------------------------------------------------------------- */
 
-    rcCommand[PITCH] += altHoldThrottleAdjustment * airplaneConfig()->fixedwing_althold_dir;
-}
-
-void applyAltHold(void)
-{
-    if (STATE(FIXED_WING)) {
-        applyFixedWingAltHold();
-    } else {
-        applyMultirotorAltHold();
-    }
-}
-
-void updateAltHoldState(void)
+/* Fonction    : altitudeUpdateBaroAltHoldState
+ * Description : TODO
+ * Entrees     :
+        TODO
+ * Sorties     :
+        TODO
+*/
+void altitudeUpdateBaroAltHoldState(void)
 {
     // Baro alt hold activate
     if (!rcModeIsActive(BOXBARO)) {
@@ -139,15 +156,22 @@ void updateAltHoldState(void)
 
     if (!FLIGHT_MODE(BARO_MODE)) {
         ENABLE_FLIGHT_MODE(BARO_MODE);
-        AltHold = EstAlt;
-        initialRawThrottleHold = rcData[THROTTLE];
-        initialThrottleHold = rcCommand[THROTTLE];
-        errorVelocityI = 0;
-        altHoldThrottleAdjustment = 0;
+        G_altitude_altCmd = G_altitude_altEst;
+        altitude_rcDataThrottleHold = rcData[THROTTLE];
+        altitude_rcCommandThrottleHold = rcCommand[THROTTLE];
+        altitude_sumErrVel = 0;
+        altitude_rcCommandThrottleAdjustment = 0;
     }
 }
 
-void updateSonarAltHoldState(void)
+/* Fonction    : altitudeUpdateSonarAltHoldState
+ * Description : TODO
+ * Entrees     :
+        TODO
+ * Sorties     :
+        TODO
+*/
+void altitudeUpdateSonarAltHoldState(void)
 {
     // Sonar alt hold activate
     if (!rcModeIsActive(BOXSONAR)) {
@@ -157,174 +181,169 @@ void updateSonarAltHoldState(void)
 
     if (!FLIGHT_MODE(SONAR_MODE)) {
         ENABLE_FLIGHT_MODE(SONAR_MODE);
-        AltHold = EstAlt;
-        initialRawThrottleHold = rcData[THROTTLE];
-        initialThrottleHold = rcCommand[THROTTLE];
-        errorVelocityI = 0;
-        altHoldThrottleAdjustment = 0;
+        G_altitude_altCmd = G_altitude_altEst;
+        altitude_rcDataThrottleHold = rcData[THROTTLE];
+        altitude_rcCommandThrottleHold = rcCommand[THROTTLE];
+        altitude_sumErrVel = 0;
+        altitude_rcCommandThrottleAdjustment = 0;
     }
 }
 
-bool isThrustFacingDownwards(attitudeEulerAngles_t *attitude)
+/* Fonction    : altitudeApplyAltHold
+ * Description : Pilotage du drone pour garder une altitude
+ * Entrees     :
+        TODO
+ * Sorties     :
+        Commande THROTTLE (rcCommand[THROTTLE])
+ */
+void altitudeApplyAltHold(void)
 {
-    return ABS(attitude->values.roll) < DEGREES_80_IN_DECIDEGREES && ABS(attitude->values.pitch) < DEGREES_80_IN_DECIDEGREES;
-}
-
-int32_t calculateAltHoldThrottleAdjustment(int32_t vel_tmp, float accZ_tmp, float accZ_old)
-{
-    int32_t result = 0;
-    int32_t error;
-    int32_t setVel;
-
-    if (!isThrustFacingDownwards(&attitude)) {
-        return result;
-    }
-
-    // Altitude P-Controller
-
-    if (!velocityControl) {
-        error = constrain(AltHold - EstAlt, -500, 500);
-        error = applyDeadband(error, 10); // remove small P parameter to reduce noise near zero position
-        setVel = constrain((pidProfile()->P8[PIDALT] * error / 128), -300, +300); // limit velocity to +/- 3 m/s
+    // rapid alt changes
+    if (rcControlsConfig()->alt_hold_fast_change) {
+        if (ABS(rcData[THROTTLE] - altitude_rcDataThrottleHold) > rcControlsConfig()->alt_hold_deadband) {
+            altitude_sumErrVel = 0;
+            rcCommand[THROTTLE] += (rcData[THROTTLE] > altitude_rcDataThrottleHold) ?
+                -rcControlsConfig()->alt_hold_deadband :
+                 rcControlsConfig()->alt_hold_deadband;
+        } else {
+            G_altitude_altCmd = G_altitude_altEst;
+            rcCommand[THROTTLE] = constrain(
+                altitude_rcCommandThrottleHold + altitude_rcCommandThrottleAdjustment,
+                motorAndServoConfig()->minthrottle,
+                motorAndServoConfig()->maxthrottle);
+        }
+    // slow alt changes, mostly used for aerial photography
     } else {
-        setVel = setVelocity;
+        if (ABS(rcData[THROTTLE] - altitude_rcDataThrottleHold) > rcControlsConfig()->alt_hold_deadband) {
+            // set velocity proportional to stick movement +100 throttle gives ~ +50 cm/s
+            altitude_vzCommand = (rcData[THROTTLE] - altitude_rcDataThrottleHold) * THROTTLE_2_VZ;
+        } else if (altitude_altCommandedChanged) {
+            altitude_vzCommand = 0;
+            G_altitude_altCmd = G_altitude_altEst;
+        }
+        rcCommand[THROTTLE] = constrain(
+            altitude_rcCommandThrottleHold + altitude_rcCommandThrottleAdjustment,
+            motorAndServoConfig()->minthrottle,
+            motorAndServoConfig()->maxthrottle);
     }
-    // Velocity PID-Controller
-
-    // P
-    error = setVel - vel_tmp;
-    result = constrain((pidProfile()->P8[PIDVEL] * error / 32), -300, +300);
-
-    // I
-    errorVelocityI += (pidProfile()->I8[PIDVEL] * error);
-    errorVelocityI = constrain(errorVelocityI, -(8192 * 200), (8192 * 200));
-    result += errorVelocityI / 8192;     // I in range +/-200
-
-    // D
-    result -= constrain(pidProfile()->D8[PIDVEL] * (accZ_tmp + accZ_old) / 512, -150, 150);
-
-    return result;
 }
 
-void calculateEstimatedAltitude(uint32_t currentTime)
+/* Fonction    : altitudeCalculate
+ * Description : Calcul l'altitude estimée
+ * Entrees     : TODO
+        G_imu_accSum (imu.c)
+ * Sorties     : TODO
+*/
+void altitudeCalculate(uint32_t time)
 {
-    static uint32_t previousTime;
-    uint32_t dTime;
-    int32_t baroVel;
-    float dt;
-    float vel_acc;
-    int32_t vel_tmp;
-    float accZ_tmp;
-    static float accZ_old = 0.0f;
-    static float vel = 0.0f;
-    static float accAlt = 0.0f;
-    static int32_t lastBaroAlt;
-
-#ifdef SONAR
-    int32_t sonarAlt = SONAR_OUT_OF_RANGE;
-    static int32_t baroAlt_offset = 0;
+    float acczMesIMU;
     float sonarTransition;
-#endif
+    float vzEstBaro;
+    float vzEstIMU;
+    float dtIMU;
+    uint32_t dtBaro;
 
-    dTime = currentTime - previousTime;
-    if (dTime < BARO_UPDATE_FREQUENCY_40HZ)
+    static float altEstBaro = 0.0f;
+    static float altEstIMU = 0.0f;
+    static float sumVzEstIMU = 0.0f;
+    static float acczMesIMUOld = 0.0f;
+    static int32_t altMesBaroOld = 0;
+    static int32_t baroAltOffset = 0;  //Ecart de mesure sur le barometre / sonar
+    static uint32_t timeOld = 0;
+
+    /* On verifie que le barometre a eu le temps de faire une nouvelle mesure */
+    dtBaro = time - timeOld;
+    if (dtBaro < BARO_UPDATE_FREQUENCY_40HZ)
         return;
+    timeOld = time;
 
-    previousTime = currentTime;
+    /* Infos issues de l'IMU */
+    // Acceleration IMU
+    if (abs(accSumCount) > 0) {
+        // Acceleration normee suivant z
+        acczMesIMU = (float)G_imu_accSum[2] / (float)accSumCount;
+    } else {
+        // Acceleration nulle suivant z : protection div0
+        acczMesIMU = 0;
+    }
 
-#ifdef BARO
+    /* Infos issu du barometre */
+    // Calibration
     if (!isBaroCalibrationComplete()) {
         performBaroCalibrationCycle();
-        vel = 0;
-        accAlt = 0;
+        sumVzEstIMU = 0.0f;
+        altEstBaro = 0.0f;
     }
 
-    BaroAlt = baroCalculateAltitude();
-#else
-    BaroAlt = 0;
-#endif
+    // Calcul de G_baro_altMes : mesure du barometre
+    baroCalculateAltitude();
 
-#ifdef SONAR
-    sonarAlt = sonarRead();
-    sonarAlt = sonarCalculateAltitude(sonarAlt, getCosTiltAngle());
+    /* Infos issues du sonar */
+    // Calcul de G_sonar_altMes : mesure du sonar
+    sonarCalculateAltitude(getCosTiltAngle());
 
-    if (sonarAlt > 0 && sonarAlt < sonarCfAltCm) {
-        // just use the SONAR
-        baroAlt_offset = BaroAlt - sonarAlt;
-        BaroAlt = sonarAlt;
+    /* Traitements */
+    // Recalage des mesures du barometre avec les mesure du sonar
+    if (G_sonar_altMes > 0 && G_sonar_altMes < sonarCfAltCm) {
+        //On ecrase la mesure du barometre avec le sonar
+        baroAltOffset = G_baro_altMes - G_sonar_altMes;
+        G_baro_altMes = G_sonar_altMes;    //FIXME : variable externe -> barometre
     } else {
-        BaroAlt -= baroAlt_offset;
-        if (sonarAlt > 0  && sonarAlt <= sonarMaxAltWithTiltCm) {
+        //On compense la mesure du barometre
+        G_baro_altMes -= baroAltOffset;
+        if (G_sonar_altMes > 0  && G_sonar_altMes <= sonarMaxAltWithTiltCm) {
             // SONAR in range, so use complementary filter
-            sonarTransition = (float)(sonarMaxAltWithTiltCm - sonarAlt) / (sonarMaxAltWithTiltCm - sonarCfAltCm);
-            BaroAlt = sonarAlt * sonarTransition + BaroAlt * (1.0f - sonarTransition);
+            sonarTransition = (float)(sonarMaxAltWithTiltCm - G_sonar_altMes)
+                                   / (sonarMaxAltWithTiltCm - sonarCfAltCm);
+            G_baro_altMes += sonarTransition * (G_sonar_altMes - G_baro_altMes);
+            //G_baro_altMes = G_sonar_altMes * sonarTransition + G_baro_altMes * (1.0f - sonarTransition);
         }
     }
-#endif
 
-    dt = accTimeSum * 1e-6f; // delta acc reading time in seconds
+    // vitesse estimee IMU : cm/sec (integration de l'acceleration)
+    vzEstIMU = acczMesIMU * accVelScale * (float)accTimeSum;   //TODO recherche unite de temps
 
-    // Integrator - velocity, cm/sec
-    if (accSumCount) {
-        accZ_tmp = (float)accSum[2] / (float)accSumCount;
-    } else {
-        accZ_tmp = 0;
-    }
-    vel_acc = accZ_tmp * accVelScale * (float)accTimeSum;
+    // Estimation de l'Altitude in cm
+    dtIMU = accTimeSum * 1e-6f; // delta acc reading time in seconds
+    altEstIMU += (vzEstIMU * 0.5f) * dtIMU + sumVzEstIMU * dtIMU;      // integrate velocity to get distance (x= a/2 * t^2)
+    altEstBaro = altEstIMU * barometerConfig()->baro_cf_alt + (float)G_baro_altMes * (1.0f - barometerConfig()->baro_cf_alt);    // complementary filter for altitude estimation (baro & acc)
 
-    // Integrator - Altitude in cm
-    accAlt += (vel_acc * 0.5f) * dt + vel * dt;                                                                 // integrate velocity to get distance (x= a/2 * t^2)
-    accAlt = accAlt * barometerConfig()->baro_cf_alt + (float)BaroAlt * (1.0f - barometerConfig()->baro_cf_alt);    // complementary filter for altitude estimation (baro & acc)
-    vel += vel_acc;
+    // Somme des vitesses verticales IMU (cm/s)
+    // Permet de prendre en compte l'historique lors du calcul de altEstIMU
+    sumVzEstIMU += vzEstIMU;
 
-#ifdef DEBUG_ALT_HOLD
-    debug[1] = accSum[2] / accSumCount; // acceleration
-    debug[2] = vel;                     // velocity
-    debug[3] = accAlt;                  // height
-#endif
-
+    //On remet a zero la somme des acceleration IMU
     imuResetAccelerationSum();
 
-#ifdef BARO
+    //Si le barometre n'est toujours pas calibre : stop
     if (!isBaroCalibrationComplete()) {
         return;
     }
-#endif
 
-#ifdef SONAR
-    if (sonarAlt > 0 && sonarAlt < sonarCfAltCm) {
+    //Vitesse verticale estimee a partir des mesures du barometre
+    vzEstBaro = (G_baro_altMes - altMesBaroOld) * 1000000.0f / dtBaro;
+    vzEstBaro = constrain(vzEstBaro, -1500, 1500);  // constrain baro velocity +/- 1500cm/s
+    vzEstBaro = applyDeadband(vzEstBaro, 10);       // to reduce noise near zero
+
+    /* Mise a jour des infos a transmettre au drone */
+    // Altitude G_altitude_altEst
+    if (G_sonar_altMes > 0 && G_sonar_altMes < sonarCfAltCm) {
         // the sonar has the best range
-        EstAlt = BaroAlt;
+        G_altitude_altEst = G_sonar_altMes;
     } else {
-        EstAlt = accAlt;
+        G_altitude_altEst = altEstBaro;
     }
-#else
-    EstAlt = accAlt;
-#endif
 
-    baroVel = (BaroAlt - lastBaroAlt) * 1000000.0f / dTime;
-    lastBaroAlt = BaroAlt;
-
-    baroVel = constrain(baroVel, -1500, 1500);  // constrain baro velocity +/- 1500cm/s
-    baroVel = applyDeadband(baroVel, 10);       // to reduce noise near zero
-
+    // Vitesse G_altitude_vzEst
     // apply Complimentary Filter to keep the calculated velocity based on baro velocity (i.e. near real velocity).
     // By using CF it's possible to correct the drift of integrated accZ (velocity) without loosing the phase, i.e without delay
-    vel = vel * barometerConfig()->baro_cf_vel + baroVel * (1.0f - barometerConfig()->baro_cf_vel);
-    vel_tmp = lrintf(vel);
+    G_altitude_vzEst = lrintf(vzEstIMU * barometerConfig()->baro_cf_vel + vzEstBaro * (1.0f - barometerConfig()->baro_cf_vel));
+    G_altitude_vzEst = applyDeadband(G_altitude_vzEst, 5);
 
-    // set vario
-    vario = applyDeadband(vel_tmp, 5);
+    // Calcul de la variation de pousse a mettre pour tenir l'altitude
+    altitudeCalculateThrottleAdjustement(acczMesIMU, acczMesIMUOld);
 
-    altHoldThrottleAdjustment = calculateAltHoldThrottleAdjustment(vel_tmp, accZ_tmp, accZ_old);
-
-    accZ_old = accZ_tmp;
+    //Enregistrement des mesures IMU et BARO
+    altMesBaroOld = G_baro_altMes;
+    acczMesIMUOld = acczMesIMU;
 }
-
-int32_t altitudeHoldGetEstimatedAltitude(void)
-{
-    return EstAlt;
-}
-
-#endif
-

@@ -198,7 +198,7 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"magADC",      2, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), FLIGHT_LOG_FIELD_CONDITION_MAG},
 #endif
 #ifdef BARO
-    {"BaroAlt",    -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), FLIGHT_LOG_FIELD_CONDITION_BARO},
+    {"G_baro_altMes",    -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), FLIGHT_LOG_FIELD_CONDITION_BARO},
 #endif
 #ifdef SONAR
     {"sonarRaw",   -1, SIGNED,   .Ipredict = PREDICT(0),       .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(TAG8_8SVB), FLIGHT_LOG_FIELD_CONDITION_SONAR},
@@ -289,7 +289,7 @@ typedef struct blackboxMainState_s {
     uint16_t amperageLatest;
 
 #ifdef BARO
-    int32_t BaroAlt;
+    int32_t G_baro_altMes;
 #endif
 #ifdef MAG
     int16_t magADC[XYZ_AXIS_COUNT];
@@ -545,7 +545,7 @@ static void writeIntraframe(void)
 
 #ifdef BARO
         if (testBlackboxCondition(FLIGHT_LOG_FIELD_CONDITION_BARO)) {
-            blackboxWriteSignedVB(blackboxCurrent->BaroAlt);
+            blackboxWriteSignedVB(blackboxCurrent->G_baro_altMes);
         }
 #endif
 
@@ -672,7 +672,7 @@ static void writeInterframe(void)
 
 #ifdef BARO
     if (testBlackboxCondition(FLIGHT_LOG_FIELD_CONDITION_BARO)) {
-        deltas[optionalFieldCount++] = blackboxCurrent->BaroAlt - blackboxLast->BaroAlt;
+        deltas[optionalFieldCount++] = blackboxCurrent->G_baro_altMes - blackboxLast->G_baro_altMes;
     }
 #endif
 
@@ -971,7 +971,7 @@ static void loadMainState(void)
 #endif
 
 #ifdef BARO
-    blackboxCurrent->BaroAlt = BaroAlt;
+    blackboxCurrent->G_baro_altMes = G_baro_altMes;
 #endif
 
 #ifdef SONAR

@@ -531,8 +531,6 @@ const clivalue_t valueTable[] = {
 
     { "small_angle",                VAR_UINT8  | MASTER_VALUE, .config.minmax = { 0,  180 } , PG_IMU_CONFIG, offsetof(imuConfig_t, small_angle)},
 
-    { "fixedwing_althold_dir",      VAR_INT8   | MASTER_VALUE, .config.minmax = { -1,  1 }, PG_AIRPLANE_ALT_HOLD_CONFIG, offsetof( airplaneConfig_t, fixedwing_althold_dir) },
-
     { "reboot_character",           VAR_UINT8  | MASTER_VALUE, .config.minmax = { 48,  126 } , PG_SERIAL_CONFIG, offsetof(serialConfig_t, reboot_character)},
 
     #ifdef GPS

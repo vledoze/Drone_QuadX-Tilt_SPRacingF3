@@ -62,7 +62,7 @@
 #define SPIN_RATE_LIMIT 20
 
 int16_t accSmooth[XYZ_AXIS_COUNT];
-int32_t accSum[XYZ_AXIS_COUNT];
+int32_t G_imu_accSum[XYZ_AXIS_COUNT];
 
 uint32_t accTimeSum = 0;        // keep track for integration of acc
 int accSumCount = 0;
@@ -164,9 +164,9 @@ float calculateAccZLowPassFilterRCTimeConstant(float accz_lpf_cutoff)
 
 void imuResetAccelerationSum(void)
 {
-    accSum[0] = 0;
-    accSum[1] = 0;
-    accSum[2] = 0;
+    G_imu_accSum[0] = 0;
+    G_imu_accSum[1] = 0;
+    G_imu_accSum[2] = 0;
     accSumCount = 0;
     accTimeSum = 0;
 }
@@ -214,9 +214,9 @@ void imuCalculateAcceleration(uint32_t deltaT)
     accz_smooth = accz_smooth + (dT / (fc_acc + dT)) * (accel_ned.V.Z - accz_smooth); // low pass filter
 
     // apply Deadband to reduce integration drift and vibration influence
-    accSum[X] += applyDeadband(lrintf(accel_ned.V.X), accDeadband->xy);
-    accSum[Y] += applyDeadband(lrintf(accel_ned.V.Y), accDeadband->xy);
-    accSum[Z] += applyDeadband(lrintf(accz_smooth), accDeadband->z);
+    G_imu_accSum[X] += applyDeadband(lrintf(accel_ned.V.X), accDeadband->xy);
+    G_imu_accSum[Y] += applyDeadband(lrintf(accel_ned.V.Y), accDeadband->xy);
+    G_imu_accSum[Z] += applyDeadband(lrintf(accz_smooth), accDeadband->z);
 
     // sum up Values for later integration to get velocity and distance
     accTimeSum += deltaT;
