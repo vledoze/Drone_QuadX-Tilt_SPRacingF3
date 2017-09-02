@@ -158,7 +158,7 @@ void pidMultiWii23(const pidProfile_t *pidProfile, const controlRateConfig_t *co
 
 #ifdef GTUNE
         if (FLIGHT_MODE(GTUNE_MODE) && ARMING_FLAG(ARMED)) {
-            calculate_Gtune(axis);
+            gtuneCalculate(axis);
         }
 #endif
 
@@ -189,7 +189,7 @@ void pidMultiWii23(const pidProfile_t *pidProfile, const controlRateConfig_t *co
 
 #ifdef GTUNE
     if (FLIGHT_MODE(GTUNE_MODE) && ARMING_FLAG(ARMED)) {
-        calculate_Gtune(FD_YAW);
+        gtuneCalculate(FD_YAW);
     }
 #endif
 

@@ -138,7 +138,7 @@ void updateGtuneState(void)
     if (rcModeIsActive(BOXGTUNE)) {
         if (!FLIGHT_MODE(GTUNE_MODE) && ARMING_FLAG(ARMED)) {
             ENABLE_FLIGHT_MODE(GTUNE_MODE);
-            init_Gtune();
+            gtuneInit();
             GTuneWasUsed = true;
         }
         if (!FLIGHT_MODE(GTUNE_MODE) && !ARMING_FLAG(ARMED) && GTuneWasUsed) {

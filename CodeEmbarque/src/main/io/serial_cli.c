@@ -682,15 +682,15 @@ const clivalue_t valueTable[] = {
     { "dterm_cut_hz",               VAR_UINT16 | PROFILE_VALUE, .config.minmax = {0, 500 } , PG_PID_PROFILE, offsetof(pidProfile_t, dterm_cut_hz)},
 
     #ifdef GTUNE
-      { "gtune_loP_rll",              VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 10,  200 } , PG_GTUNE_CONFIG, offsetof(gtuneConfig_t, gtune_lolimP[FD_ROLL])},
-      { "gtune_loP_ptch",             VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 10,  200 } , PG_GTUNE_CONFIG, offsetof(gtuneConfig_t, gtune_lolimP[FD_PITCH])},
-      { "gtune_loP_yw",               VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 10,  200 } , PG_GTUNE_CONFIG, offsetof(gtuneConfig_t, gtune_lolimP[FD_YAW])},
-      { "gtune_hiP_rll",              VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 0,  200 } , PG_GTUNE_CONFIG, offsetof(gtuneConfig_t, gtune_hilimP[FD_ROLL])},
-      { "gtune_hiP_ptch",             VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 0,  200 } , PG_GTUNE_CONFIG, offsetof(gtuneConfig_t, gtune_hilimP[FD_PITCH])},
-      { "gtune_hiP_yw",               VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 0,  200 } , PG_GTUNE_CONFIG, offsetof(gtuneConfig_t, gtune_hilimP[FD_YAW])},
-      { "gtune_pwr",                  VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 0,  10 } , PG_GTUNE_CONFIG, offsetof(gtuneConfig_t, gtune_pwr)},
-      { "gtune_settle_time",          VAR_UINT16 | PROFILE_VALUE, .config.minmax = { 200,  1000 } , PG_GTUNE_CONFIG, offsetof(gtuneConfig_t, gtune_settle_time)},
-      { "gtune_average_cycles",       VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 8,  128 } , PG_GTUNE_CONFIG, offsetof(gtuneConfig_t, gtune_average_cycles)},
+      { "gtune_loP_rll",              VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 10,  200 } , PG_GTUNE_CONFIG_ID, offsetof(TYP_gtune_config, gtune_lolimP[FD_ROLL])},
+      { "gtune_loP_ptch",             VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 10,  200 } , PG_GTUNE_CONFIG_ID, offsetof(TYP_gtune_config, gtune_lolimP[FD_PITCH])},
+      { "gtune_loP_yw",               VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 10,  200 } , PG_GTUNE_CONFIG_ID, offsetof(TYP_gtune_config, gtune_lolimP[FD_YAW])},
+      { "gtune_hiP_rll",              VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 0,  200 } , PG_GTUNE_CONFIG_ID, offsetof(TYP_gtune_config, gtune_hilimP[FD_ROLL])},
+      { "gtune_hiP_ptch",             VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 0,  200 } , PG_GTUNE_CONFIG_ID, offsetof(TYP_gtune_config, gtune_hilimP[FD_PITCH])},
+      { "gtune_hiP_yw",               VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 0,  200 } , PG_GTUNE_CONFIG_ID, offsetof(TYP_gtune_config, gtune_hilimP[FD_YAW])},
+      { "gtune_pwr",                  VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 0,  10 } , PG_GTUNE_CONFIG_ID, offsetof(TYP_gtune_config, gtune_pwr)},
+      { "gtune_settle_time",          VAR_UINT16 | PROFILE_VALUE, .config.minmax = { 200,  1000 } , PG_GTUNE_CONFIG_ID, offsetof(TYP_gtune_config, gtune_settle_time)},
+      { "gtune_average_cycles",       VAR_UINT8  | PROFILE_VALUE, .config.minmax = { 8,  128 } , PG_GTUNE_CONFIG_ID, offsetof(TYP_gtune_config, gtune_average_cycles)},
     #endif //GTUNE
 
     #ifdef BLACKBOX

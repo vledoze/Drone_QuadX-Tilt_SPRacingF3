@@ -15,4 +15,7 @@
  * along with Cleanflight.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-uint32_t GPS_coord_to_degrees(const char* coordinateString);
+#ifdef GPS
+    // Fonction de parsing et de conversion des infos GPS
+    uint32_t gpsCoord2Deg(const char* coordinateString);
+#endif

@@ -474,7 +474,7 @@ bool gpsNewFrame(uint8_t c)
   EOS increased the precision here, even if we think that the gps is not precise enough, with 10e5 precision it has 76cm resolution
   with 10e7 it's around 1 cm now. Increasing it further is irrelevant, since even 1cm resolution is unrealistic, however increased
   resolution also increased precision of nav calculations
-static uint32_t GPS_coord_to_degrees(char *coordinateString)
+static uint32_t gpsCoord2Deg(char *coordinateString)
 {
     char *p = s, *d = s;
     uint8_t min, deg = 0;
@@ -567,14 +567,14 @@ static bool gpsNewFrameNMEA(char c)
             //          case 1:             // Time information
             //              break;
                         case 2:
-                            gps_Msg.latitude = GPS_coord_to_degrees(string);
+                            gps_Msg.latitude = gpsCoord2Deg(string);
                             break;
                         case 3:
                             if (string[0] == 'S')
                                 gps_Msg.latitude *= -1;
                             break;
                         case 4:
-                            gps_Msg.longitude = GPS_coord_to_degrees(string);
+                            gps_Msg.longitude = gpsCoord2Deg(string);
                             break;
                         case 5:
                             if (string[0] == 'W')

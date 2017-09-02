@@ -191,7 +191,7 @@ void pidMultiWiiRewrite(const pidProfile_t *pidProfile, const controlRateConfig_
 
 #ifdef GTUNE
         if (FLIGHT_MODE(GTUNE_MODE) && ARMING_FLAG(ARMED)) {
-             calculate_Gtune(axis);
+             gtuneCalculate(axis);
         }
 #endif
     }
