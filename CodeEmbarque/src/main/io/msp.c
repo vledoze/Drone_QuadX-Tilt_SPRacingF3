@@ -458,8 +458,8 @@ typedef struct pgToMSPMapEntry_s {
 
 static const pgToMSPMapEntry_t pgToMSPMap[] =
 {
-    { PG_BOARD_ALIGNMENT, MSP_BOARD_ALIGNMENT, MSP_SET_BOARD_ALIGNMENT },
-    { PG_FAILSAFE_CONFIG, MSP_FAILSAFE_CONFIG, MSP_SET_FAILSAFE_CONFIG },
+    { PG_BOARD_ALIGNMENT_ID, MSP_BOARD_ALIGNMENT, MSP_SET_BOARD_ALIGNMENT },
+    { PG_FAILSAFE_CONFIG_ID, MSP_FAILSAFE_CONFIG, MSP_SET_FAILSAFE_CONFIG },
 };
 
 // criteria is passed by value; cast as (void *)
@@ -750,7 +750,7 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             sbufWriteU16(dst, motorAndServoConfig()->minthrottle);
             sbufWriteU16(dst, motorAndServoConfig()->maxthrottle);
             sbufWriteU16(dst, motorAndServoConfig()->mincommand);
-            sbufWriteU16(dst, failsafeConfig()->failsafe_throttle);
+            sbufWriteU16(dst, PG_failsafe_config()->failsafe_throttle);
             #ifdef GPS
                 sbufWriteU8(dst, gpsConfig()->provider); // gps_type
                 sbufWriteU8(dst, 0);                     // TODO gps_baudrate (an index, cleanflight uses a uint32_t
@@ -1150,7 +1150,7 @@ static int processInCommand(mspPacket_t *cmd)
             motorAndServoConfig()->minthrottle  = sbufReadU16(src);
             motorAndServoConfig()->maxthrottle  = sbufReadU16(src);
             motorAndServoConfig()->mincommand   = sbufReadU16(src);
-            failsafeConfig()->failsafe_throttle = sbufReadU16(src);
+            PG_failsafe_config()->failsafe_throttle = sbufReadU16(src);
             #ifdef GPS
                 gpsConfig()->provider = sbufReadU8(src); // gps_type
                 sbufReadU8(src);                         // gps_baudrate

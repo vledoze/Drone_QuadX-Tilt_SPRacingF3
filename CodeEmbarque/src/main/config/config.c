@@ -121,7 +121,7 @@ static void activateConfig(void)
     gpsUsePIDs(pidProfile());
 #endif
 
-    useFailsafeConfig();
+    failsafeSetConfig();
     setAccelerationTrims(&sensorTrims()->accZero);
 
     initMixer();

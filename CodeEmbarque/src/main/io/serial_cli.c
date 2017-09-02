@@ -586,9 +586,9 @@ const clivalue_t valueTable[] = {
     { "align_acc",                  VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_ALIGNMENT } , PG_SENSOR_ALIGNMENT_CONFIG, offsetof(sensorAlignmentConfig_t, acc_align)},
     { "align_mag",                  VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_ALIGNMENT } , PG_SENSOR_ALIGNMENT_CONFIG, offsetof(sensorAlignmentConfig_t, mag_align)},
 
-    { "align_board_roll",           VAR_INT16  | MASTER_VALUE, .config.minmax = { -180,  360 } , PG_BOARD_ALIGNMENT, offsetof(boardAlignment_t, rollDegrees)},
-    { "align_board_pitch",          VAR_INT16  | MASTER_VALUE, .config.minmax = { -180,  360 } , PG_BOARD_ALIGNMENT, offsetof(boardAlignment_t, pitchDegrees)},
-    { "align_board_yaw",            VAR_INT16  | MASTER_VALUE, .config.minmax = { -180,  360 } , PG_BOARD_ALIGNMENT, offsetof(boardAlignment_t, yawDegrees)},
+    { "align_board_roll",           VAR_INT16  | MASTER_VALUE, .config.minmax = { -180,  360 } , PG_BOARD_ALIGNMENT_ID, offsetof(boardAlignment_t, rollDegrees)},
+    { "align_board_pitch",          VAR_INT16  | MASTER_VALUE, .config.minmax = { -180,  360 } , PG_BOARD_ALIGNMENT_ID, offsetof(boardAlignment_t, pitchDegrees)},
+    { "align_board_yaw",            VAR_INT16  | MASTER_VALUE, .config.minmax = { -180,  360 } , PG_BOARD_ALIGNMENT_ID, offsetof(boardAlignment_t, yawDegrees)},
 
     { "max_angle_inclination",      VAR_UINT16 | MASTER_VALUE, .config.minmax = { 100,  900 } , PG_IMU_CONFIG, offsetof(imuConfig_t, max_angle_inclination) },
 
@@ -621,12 +621,12 @@ const clivalue_t valueTable[] = {
     { "tpa_rate",                   VAR_UINT8  | CONTROL_RATE_VALUE, .config.minmax = { 0,  CONTROL_RATE_CONFIG_TPA_MAX} , PG_CONTROL_RATE_PROFILES, offsetof(controlRateConfig_t, dynThrPID)},
     { "tpa_breakpoint",             VAR_UINT16 | CONTROL_RATE_VALUE, .config.minmax = { PWM_RANGE_MIN,  PWM_RANGE_MAX} , PG_CONTROL_RATE_PROFILES, offsetof(controlRateConfig_t, tpa_breakpoint)},
 
-    { "failsafe_delay",             VAR_UINT8  | MASTER_VALUE, .config.minmax = { 0,  200 } , PG_FAILSAFE_CONFIG, offsetof(failsafeConfig_t, failsafe_delay)},
-    { "failsafe_off_delay",         VAR_UINT8  | MASTER_VALUE, .config.minmax = { 0,  200 } , PG_FAILSAFE_CONFIG, offsetof(failsafeConfig_t, failsafe_off_delay)},
-    { "failsafe_throttle",          VAR_UINT16 | MASTER_VALUE, .config.minmax = { PWM_RANGE_MIN,  PWM_RANGE_MAX } , PG_FAILSAFE_CONFIG, offsetof(failsafeConfig_t, failsafe_throttle)},
-    { "failsafe_kill_switch",       VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON } , PG_FAILSAFE_CONFIG, offsetof(failsafeConfig_t, failsafe_kill_switch)},
-    { "failsafe_throttle_low_delay",VAR_UINT16 | MASTER_VALUE, .config.minmax = { 0,  300 } , PG_FAILSAFE_CONFIG, offsetof(failsafeConfig_t, failsafe_throttle_low_delay)},
-    { "failsafe_procedure",         VAR_UINT8  | MASTER_VALUE, .config.minmax = { 0,  1 } , PG_FAILSAFE_CONFIG, offsetof(failsafeConfig_t, failsafe_procedure)},
+    { "failsafe_delay",             VAR_UINT8  | MASTER_VALUE, .config.minmax = { 0,  200 } , PG_FAILSAFE_CONFIG_ID, offsetof(TYP_failsafe_config, failsafe_delay)},
+    { "failsafe_off_delay",         VAR_UINT8  | MASTER_VALUE, .config.minmax = { 0,  200 } , PG_FAILSAFE_CONFIG_ID, offsetof(TYP_failsafe_config, failsafe_off_delay)},
+    { "failsafe_throttle",          VAR_UINT16 | MASTER_VALUE, .config.minmax = { PWM_RANGE_MIN,  PWM_RANGE_MAX } , PG_FAILSAFE_CONFIG_ID, offsetof(TYP_failsafe_config, failsafe_throttle)},
+    { "failsafe_kill_switch",       VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON } , PG_FAILSAFE_CONFIG_ID, offsetof(TYP_failsafe_config, failsafe_kill_switch)},
+    { "failsafe_throttle_low_delay",VAR_UINT16 | MASTER_VALUE, .config.minmax = { 0,  300 } , PG_FAILSAFE_CONFIG_ID, offsetof(TYP_failsafe_config, failsafe_throttle_low_delay)},
+    { "failsafe_procedure",         VAR_UINT8  | MASTER_VALUE, .config.minmax = { 0,  1 } , PG_FAILSAFE_CONFIG_ID, offsetof(TYP_failsafe_config, failsafe_procedure)},
 
     { "gimbal_mode",                VAR_UINT8  | PROFILE_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_GIMBAL_MODE }, PG_GIMBAL_CONFIG, offsetof(gimbalConfig_t, mode)},
 

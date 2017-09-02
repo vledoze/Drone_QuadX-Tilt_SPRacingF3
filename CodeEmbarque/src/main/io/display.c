@@ -230,22 +230,22 @@ static void updateFailsafeStatus(void)
 {
     char failsafeIndicator = '?';
     switch (failsafePhase()) {
-        case FAILSAFE_IDLE:
+        case FAILSAFE_PHASE___IDLE:
             failsafeIndicator = '-';
             break;
-        case FAILSAFE_RX_LOSS_DETECTED:
+        case FAILSAFE_PHASE___RX_LOSS_DETECTED:
             failsafeIndicator = 'R';
             break;
-        case FAILSAFE_LANDING:
+        case FAILSAFE_PHASE___LANDING:
             failsafeIndicator = 'l';
             break;
-        case FAILSAFE_LANDED:
+        case FAILSAFE_PHASE___LANDED:
             failsafeIndicator = 'L';
             break;
-        case FAILSAFE_RX_LOSS_MONITORING:
+        case FAILSAFE_PHASE___RX_LOSS_MONITORING:
             failsafeIndicator = 'M';
             break;
-        case FAILSAFE_RX_LOSS_RECOVERED:
+        case FAILSAFE_PHASE___RX_LOSS_RECOVERED:
             failsafeIndicator = 'r';
             break;
     }

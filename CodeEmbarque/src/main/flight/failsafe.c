@@ -45,171 +45,205 @@
 /*
  * Usage:
  *
- * failsafeInit() and useFailsafeConfig() must be called before the other methods are used.
+ * failsafeInit() and failsafeSetConfig() must be called before the other methods are used.
  *
- * failsafeInit() and useFailsafeConfig() can be called in any order.
+ * failsafeInit() and failsafeSetConfig() can be called in any order.
  * failsafeInit() should only be called once.
  *
  * enable() should be called after system initialisation.
  */
 
-static failsafeState_t failsafeState;
+/* Variables ================================================================ */
+/* Static ------------------------------------------------------------------- */
+typedef struct STR_failsafe_state {
+    int16_t events;
+    bool monitoring;
+    bool active;
+    uint32_t rxDataFailurePeriod;
+    uint32_t validRxDataReceivedAt;
+    uint32_t validRxDataFailedAt;
+    uint32_t throttleLowPeriod;             // throttle stick must have been below 'min_check' for this period
+    uint32_t landingShouldBeFinishedAt;
+    uint32_t receivingRxDataPeriod;         // period for the required period of valid rxData
+    uint32_t receivingRxDataPeriodPreset;   // preset for the required period of valid rxData
+    ENUM_failsafe_phase phase;
+    ENUM_failsafe_RxLinkState rxLinkState;
+} TYP_failsafe_state;
+static TYP_failsafe_state failsafe_state;
 
-PG_REGISTER_WITH_RESET_TEMPLATE(failsafeConfig_t, failsafeConfig, PG_FAILSAFE_CONFIG, 0);
-
-PG_RESET_TEMPLATE(failsafeConfig_t, failsafeConfig,
+/* Global ------------------------------------------------------------------- */
+PG_REGISTER_WITH_RESET_TEMPLATE(TYP_failsafe_config, PG_failsafe_config, PG_FAILSAFE_CONFIG_ID, 0);
+PG_RESET_TEMPLATE(TYP_failsafe_config, PG_failsafe_config,
     .failsafe_delay = 10,              // 1sec
     .failsafe_off_delay = 200,         // 20sec
     .failsafe_throttle = 1000,         // default throttle off.
     .failsafe_throttle_low_delay = 100, // default throttle low delay for "just disarm" on failsafe condition
 );
 
+/* Fonctions ================================================================ */
+/* Static ------------------------------------------------------------------- */
 static void failsafeReset(void)
 {
-    failsafeState.rxDataFailurePeriod = PERIOD_RXDATA_FAILURE + failsafeConfig()->failsafe_delay * MILLIS_PER_TENTH_SECOND;
-    failsafeState.validRxDataReceivedAt = 0;
-    failsafeState.validRxDataFailedAt = 0;
-    failsafeState.throttleLowPeriod = 0;
-    failsafeState.landingShouldBeFinishedAt = 0;
-    failsafeState.receivingRxDataPeriod = 0;
-    failsafeState.receivingRxDataPeriodPreset = 0;
-    failsafeState.phase = FAILSAFE_IDLE;
-    failsafeState.rxLinkState = FAILSAFE_RXLINK_DOWN;
+    failsafe_state.rxDataFailurePeriod = PERIOD_RXDATA_FAILURE + PG_failsafe_config()->failsafe_delay * MILLIS_PER_TENTH_SECOND;
+    failsafe_state.validRxDataReceivedAt = 0;
+    failsafe_state.validRxDataFailedAt = 0;
+    failsafe_state.throttleLowPeriod = 0;
+    failsafe_state.landingShouldBeFinishedAt = 0;
+    failsafe_state.receivingRxDataPeriod = 0;
+    failsafe_state.receivingRxDataPeriodPreset = 0;
+    failsafe_state.phase = FAILSAFE_PHASE___IDLE;
+    failsafe_state.rxLinkState = FAILSAFE_RXLINKSTATE___DOWN;
 }
 
-void useFailsafeConfig()
+static bool failsafeShouldHaveCausedLandingByNow(void)
+{
+    return (millis() > failsafe_state.landingShouldBeFinishedAt);
+}
+
+static void failsafeActivate(void)
+{
+    // Lorsque le failsafe est active on cherche a atterir
+    failsafe_state.active = true;
+    failsafe_state.phase = FAILSAFE_PHASE___LANDING;
+    ENABLE_FLIGHT_MODE(FAILSAFE_MODE);
+    failsafe_state.landingShouldBeFinishedAt = millis() + PG_failsafe_config()->failsafe_off_delay * MILLIS_PER_TENTH_SECOND;
+    failsafe_state.events++;
+}
+
+static void failsafeApplyControlInput(void)
+{
+    // Prise de control du drone
+    // - Stabilisation
+    for (int i = 0; i < 3; i++) {
+        rcData[i] = rxConfig()->midrc;
+    }
+    // - Descente
+    rcData[THROTTLE] = PG_failsafe_config()->failsafe_throttle;
+}
+
+/* Getter ------------------------------------------------------------------- */
+ENUM_failsafe_phase failsafePhase(void)
+{
+    return failsafe_state.phase;
+}
+
+bool failsafeIsMonitoring(void)
+{
+    return failsafe_state.monitoring;
+}
+
+bool failsafeIsActive(void)
+{
+    return failsafe_state.active;
+}
+
+bool failsafeIsReceivingRxData(void)
+{
+    return (failsafe_state.rxLinkState == FAILSAFE_RXLINKSTATE___UP);
+}
+
+/* Corp --------------------------------------------------------------------- */
+void failsafeSetConfig(void)
 {
     failsafeReset();
 }
 
 void failsafeInit(void)
 {
-    failsafeState.events = 0;
-    failsafeState.monitoring = false;
-
+    failsafe_state.events = 0;
+    failsafe_state.monitoring = false;
     return;
-}
-
-failsafePhase_e failsafePhase()
-{
-    return failsafeState.phase;
-}
-
-bool failsafeIsMonitoring(void)
-{
-    return failsafeState.monitoring;
-}
-
-bool failsafeIsActive(void)
-{
-    return failsafeState.active;
 }
 
 void failsafeStartMonitoring(void)
 {
-    failsafeState.monitoring = true;
-}
-
-static bool failsafeShouldHaveCausedLandingByNow(void)
-{
-    return (millis() > failsafeState.landingShouldBeFinishedAt);
-}
-
-static void failsafeActivate(void)
-{
-    failsafeState.active = true;
-    failsafeState.phase = FAILSAFE_LANDING;
-    ENABLE_FLIGHT_MODE(FAILSAFE_MODE);
-    failsafeState.landingShouldBeFinishedAt = millis() + failsafeConfig()->failsafe_off_delay * MILLIS_PER_TENTH_SECOND;
-
-    failsafeState.events++;
-}
-
-static void failsafeApplyControlInput(void)
-{
-    for (int i = 0; i < 3; i++) {
-        rcData[i] = rxConfig()->midrc;
-    }
-    rcData[THROTTLE] = failsafeConfig()->failsafe_throttle;
-}
-
-bool failsafeIsReceivingRxData(void)
-{
-    return (failsafeState.rxLinkState == FAILSAFE_RXLINK_UP);
+    failsafe_state.monitoring = true;
 }
 
 void failsafeOnRxSuspend(uint32_t usSuspendPeriod)
 {
-    failsafeState.validRxDataReceivedAt += (usSuspendPeriod / 1000);    // / 1000 to convert micros to millis
+    failsafe_state.validRxDataReceivedAt += (usSuspendPeriod / 1000);    // / 1000 to convert micros to millis
 }
 
 void failsafeOnRxResume(void)
 {
-    failsafeState.validRxDataReceivedAt = millis();                     // prevent RX link down trigger, restart rx link up
-    failsafeState.rxLinkState = FAILSAFE_RXLINK_UP;                     // do so while rx link is up
+    failsafe_state.validRxDataReceivedAt = millis();                     // prevent RX link down trigger, restart rx link up
+    failsafe_state.rxLinkState = FAILSAFE_RXLINKSTATE___UP;                     // do so while rx link is up
 }
 
 void failsafeOnValidDataReceived(void)
 {
-    failsafeState.validRxDataReceivedAt = millis();
-    if ((failsafeState.validRxDataReceivedAt - failsafeState.validRxDataFailedAt) > PERIOD_RXDATA_RECOVERY) {
-        failsafeState.rxLinkState = FAILSAFE_RXLINK_UP;
+    failsafe_state.validRxDataReceivedAt = millis();
+    if ((failsafe_state.validRxDataReceivedAt - failsafe_state.validRxDataFailedAt) > PERIOD_RXDATA_RECOVERY) {
+        failsafe_state.rxLinkState = FAILSAFE_RXLINKSTATE___UP;
     }
 }
 
 void failsafeOnValidDataFailed(void)
 {
-    failsafeState.validRxDataFailedAt = millis();
-    if ((failsafeState.validRxDataFailedAt - failsafeState.validRxDataReceivedAt) > failsafeState.rxDataFailurePeriod) {
-        failsafeState.rxLinkState = FAILSAFE_RXLINK_DOWN;
+    failsafe_state.validRxDataFailedAt = millis();
+    if ((failsafe_state.validRxDataFailedAt - failsafe_state.validRxDataReceivedAt) > failsafe_state.rxDataFailurePeriod) {
+        failsafe_state.rxLinkState = FAILSAFE_RXLINKSTATE___DOWN;
     }
 }
 
 void failsafeUpdateState(void)
 {
-    if (!failsafeIsMonitoring()) {
+    // Si pas de monitoring on sort
+    if (!failsafe_state.monitoring) {
         return;
     }
 
-    bool receivingRxData = failsafeIsReceivingRxData();
-    bool armed = ARMING_FLAG(ARMED);
-    bool failsafeSwitchIsOn = rcModeIsActive(BOXFAILSAFE);
-    beeperMode_e beeperMode = BEEPER_SILENCE;
+    // Variables locales
+    bool reprocessState;
+    bool receivingRxData;
+    bool armed;
+    bool failsafeSwitchIsOn;
+    beeperMode_e beeperMode;
 
+    // On beep si le signal est perdu
+    receivingRxData = failsafeIsReceivingRxData();
+    beeperMode = BEEPER_SILENCE;;
     if (!receivingRxData) {
         beeperMode = BEEPER_RX_LOST;
     }
 
-    bool reprocessState;
-
+    // On boucle tant que reprocessState est vrai
     do {
         reprocessState = false;
+        armed = ARMING_FLAG(ARMED);
+        failsafeSwitchIsOn = rcModeIsActive(BOXFAILSAFE);;
 
-        switch (failsafeState.phase) {
-            case FAILSAFE_IDLE:
+        // Phases du failsafe
+        switch (failsafe_state.phase) {
+
+            // PHASE : Au repos
+            case FAILSAFE_PHASE___IDLE:
+                // Si le drone est armé
                 if (armed) {
                     // Track throttle command below minimum time
                     if (THROTTLE_HIGH == calculateThrottleStatus(rxConfig())) {
-                        failsafeState.throttleLowPeriod = millis() + failsafeConfig()->failsafe_throttle_low_delay * MILLIS_PER_TENTH_SECOND;
+                        failsafe_state.throttleLowPeriod = millis() + PG_failsafe_config()->failsafe_throttle_low_delay * MILLIS_PER_TENTH_SECOND;
                     }
                     // Kill switch logic (must be independent of receivingRxData to skip PERIOD_RXDATA_FAILURE delay before disarming)
-                    if (failsafeSwitchIsOn && failsafeConfig()->failsafe_kill_switch) {
+                    if (failsafeSwitchIsOn && PG_failsafe_config()->failsafe_kill_switch) {
                         // KillswitchEvent: failsafe switch is configured as KILL switch and is switched ON
                         failsafeActivate();
-                        failsafeState.phase = FAILSAFE_LANDED;      // skip auto-landing procedure
-                        failsafeState.receivingRxDataPeriodPreset = PERIOD_OF_1_SECONDS;    // require 1 seconds of valid rxData
+                        failsafe_state.phase = FAILSAFE_PHASE___LANDED;      // skip auto-landing procedure
+                        failsafe_state.receivingRxDataPeriodPreset = PERIOD_OF_1_SECONDS;    // require 1 seconds of valid rxData
                         reprocessState = true;
                     } else if (!receivingRxData) {
-                        if (millis() > failsafeState.throttleLowPeriod) {
+                        if (millis() > failsafe_state.throttleLowPeriod) {
                             // JustDisarm: throttle was LOW for at least 'failsafe_throttle_low_delay' seconds
                             failsafeActivate();
-                            failsafeState.phase = FAILSAFE_LANDED;      // skip auto-landing procedure
-                            failsafeState.receivingRxDataPeriodPreset = PERIOD_OF_3_SECONDS; // require 3 seconds of valid rxData
+                            failsafe_state.phase = FAILSAFE_PHASE___LANDED;      // skip auto-landing procedure
+                            failsafe_state.receivingRxDataPeriodPreset = PERIOD_OF_3_SECONDS; // require 3 seconds of valid rxData
                         } else {
-                            failsafeState.phase = FAILSAFE_RX_LOSS_DETECTED;
+                            failsafe_state.phase = FAILSAFE_PHASE___RX_LOSS_DETECTED;
                         }
                         reprocessState = true;
                     }
+                // Si le drone n'est pas arme
                 } else {
                     // When NOT armed, show rxLinkState of failsafe switch in GUI (failsafe mode)
                     if (failsafeSwitchIsOn) {
@@ -218,79 +252,89 @@ void failsafeUpdateState(void)
                         DISABLE_FLIGHT_MODE(FAILSAFE_MODE);
                     }
                     // Throttle low period expired (= low long enough for JustDisarm)
-                    failsafeState.throttleLowPeriod = 0;
+                    failsafe_state.throttleLowPeriod = 0;
                 }
                 break;
 
-            case FAILSAFE_RX_LOSS_DETECTED:
+            // PHASE : Signal radio perdu
+            case FAILSAFE_PHASE___RX_LOSS_DETECTED:
+                // On recupere le signal
                 if (receivingRxData) {
-                    failsafeState.phase = FAILSAFE_RX_LOSS_RECOVERED;
+                    failsafe_state.phase = FAILSAFE_PHASE___RX_LOSS_RECOVERED;
+                // On n'a pas recuperé le signal
                 } else {
-                    switch (failsafeConfig()->failsafe_procedure) {
+                    // Choix de la procedure d'atterissage
+                    switch (PG_failsafe_config()->failsafe_procedure) {
                         default:
-                        case FAILSAFE_PROCEDURE_AUTO_LANDING:
+                        case FAILSAFE_PROCEDURE___AUTO_LANDING:
                             // Stabilize, and set Throttle to specified level
                             failsafeActivate();
                             break;
-
-                        case FAILSAFE_PROCEDURE_DROP_IT:
+                        case FAILSAFE_PROCEDURE___DROP_IT:
                             // Drop the craft
                             failsafeActivate();
-                            failsafeState.phase = FAILSAFE_LANDED;      // skip auto-landing procedure
-                            failsafeState.receivingRxDataPeriodPreset = PERIOD_OF_3_SECONDS; // require 3 seconds of valid rxData
+                            failsafe_state.phase = FAILSAFE_PHASE___LANDED;      // skip auto-landing procedure
+                            failsafe_state.receivingRxDataPeriodPreset = PERIOD_OF_3_SECONDS; // require 3 seconds of valid rxData
                             break;
                     }
                 }
                 reprocessState = true;
                 break;
 
-            case FAILSAFE_LANDING:
+            // PHASE : Atterissage du drone
+            case FAILSAFE_PHASE___LANDING:
+                // On recupere le signal
                 if (receivingRxData) {
-                    failsafeState.phase = FAILSAFE_RX_LOSS_RECOVERED;
+                    failsafe_state.phase = FAILSAFE_PHASE___RX_LOSS_RECOVERED;
                     reprocessState = true;
                 }
+                // Si le drone est arme - on prend le control
                 if (armed) {
                     failsafeApplyControlInput();
                     beeperMode = BEEPER_RX_LOST_LANDING;
                 }
+                // Drone consideré comme etant au sol
                 if (failsafeShouldHaveCausedLandingByNow() || !armed) {
-                    failsafeState.receivingRxDataPeriodPreset = PERIOD_OF_30_SECONDS; // require 30 seconds of valid rxData
-                    failsafeState.phase = FAILSAFE_LANDED;
+                    failsafe_state.receivingRxDataPeriodPreset = PERIOD_OF_30_SECONDS; // require 30 seconds of valid rxData
+                    failsafe_state.phase = FAILSAFE_PHASE___LANDED;
                     reprocessState = true;
                 }
                 break;
 
-            case FAILSAFE_LANDED:
+            // PHASE : Drone au sol
+            case FAILSAFE_PHASE___LANDED:
                 ENABLE_ARMING_FLAG(PREVENT_ARMING); // To prevent accidently rearming by an intermittent rx link
                 mwDisarm();
-                failsafeState.receivingRxDataPeriod = millis() + failsafeState.receivingRxDataPeriodPreset; // set required period of valid rxData
-                failsafeState.phase = FAILSAFE_RX_LOSS_MONITORING;
+                failsafe_state.receivingRxDataPeriod = millis() + failsafe_state.receivingRxDataPeriodPreset; // set required period of valid rxData
+                failsafe_state.phase = FAILSAFE_PHASE___RX_LOSS_MONITORING;
                 reprocessState = true;
                 break;
 
-            case FAILSAFE_RX_LOSS_MONITORING:
+            // PHASE : Dignostic etat de la liaison radio (autorisation de repartir seulement si liaison radio OK)
+            case FAILSAFE_PHASE___RX_LOSS_MONITORING:
                 // Monitoring the rx link to allow rearming when it has become good for > `receivingRxDataPeriodPreset` time.
                 if (receivingRxData) {
-                    if (millis() > failsafeState.receivingRxDataPeriod) {
+                    if (millis() > failsafe_state.receivingRxDataPeriod) {
                         // rx link is good now, when arming via ARM switch, it must be OFF first
                         if (!(!isUsingSticksForArming() && rcModeIsActive(BOXARM))) {
                             DISABLE_ARMING_FLAG(PREVENT_ARMING);
-                            failsafeState.phase = FAILSAFE_RX_LOSS_RECOVERED;
+                            failsafe_state.phase = FAILSAFE_PHASE___RX_LOSS_RECOVERED;
                             reprocessState = true;
                         }
                     }
                 } else {
-                    failsafeState.receivingRxDataPeriod = millis() + failsafeState.receivingRxDataPeriodPreset;
+                    failsafe_state.receivingRxDataPeriod = millis() + failsafe_state.receivingRxDataPeriodPreset;
                 }
                 break;
 
-            case FAILSAFE_RX_LOSS_RECOVERED:
+            // PHASE : Liaison radio recuperee
+            case FAILSAFE_PHASE___RX_LOSS_RECOVERED:
                 // Entering IDLE with the requirement that throttle first must be at min_check for failsafe_throttle_low_delay period.
                 // This is to prevent that JustDisarm is activated on the next iteration.
                 // Because that would have the effect of shutting down failsafe handling on intermittent connections.
-                failsafeState.throttleLowPeriod = millis() + failsafeConfig()->failsafe_throttle_low_delay * MILLIS_PER_TENTH_SECOND;
-                failsafeState.phase = FAILSAFE_IDLE;
-                failsafeState.active = false;
+                failsafe_state.throttleLowPeriod = millis() + PG_failsafe_config()->failsafe_throttle_low_delay * MILLIS_PER_TENTH_SECOND;
+                failsafe_state.phase = FAILSAFE_PHASE___IDLE;
+                failsafe_state.active = false;
                 DISABLE_FLIGHT_MODE(FAILSAFE_MODE);
                 reprocessState = true;
                 break;
